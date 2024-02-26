@@ -120,10 +120,3 @@ Returns the tracing url from global if exists or from the chart's values
     {{- .Values.env.metrics.url -}}
 {{- end -}}
 {{- end -}}
-
-{{/*
-Returns secret name
-*/}}
-{{- define "nginx-s3-gateway.secretName" -}}
-{{- printf "s3-%s" (include "nginx-s3-gateway.fullname" .) -}}
-{{- end -}}

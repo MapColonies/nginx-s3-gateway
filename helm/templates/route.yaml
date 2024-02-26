@@ -1,12 +1,15 @@
-{{- $cloudProviderFlavor := include "nginx-s3-gateway.cloudProviderFlavor" . -}}
-{{- if and (and (.Values.enabled) (eq $cloudProviderFlavor "openshift")) (.Values.route.enabled) -}}
 {{- $releaseName := .Release.Name -}}
+{{- $chartName := include "nginx-s3-gateway.name" . -}}
+{{- $cloudProviderFlavor := include "nginx-s3-gateway.cloudProviderFlavor" . -}}
+{{- if and (eq $cloudProviderFlavor "openshift") (.Values.route.enabled) -}}
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: {{ $releaseName }}-route
+  name: {{ $releaseName }}-{{ $chartName }}-route
+{{- with .Values.route.annotations }}
   annotations:
-    haproxy.router.openshift.io/rewrite-target: /
+{{ toYaml . | indent 4 }}
+{{- end }}
 spec:
   {{- if .Values.route.host }}
   host: {{ .Values.route.host | quote }}
@@ -14,15 +17,15 @@ spec:
   path: {{ .Values.route.path | default "/" }}
   to:
     kind: Service
-    name: {{ $releaseName }}
+    name: {{ $releaseName }}-{{ $chartName }}
   {{- if .Values.route.https }}
   tls:
     termination: edge
+    insecureEdgeTerminationPolicy: Redirect
     {{- if .Values.route.useCert }}
-    certificate: {{ .Files.Get "config/cert.pem" | quote }}
+    certificate: {{ .Files.Get "config/certificate.pem" | quote }}
     key: {{ .Files.Get "config/key.pem" | quote }}
     caCertificate: {{ .Files.Get "config/caCertificate.pem" | quote }}
-    insecureEdgeTerminationPolicy: Redirect
     {{- end }}
   {{- end }}
 {{ end }}

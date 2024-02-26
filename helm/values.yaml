@@ -1,38 +1,115 @@
 global:
-  cloudProvider: {}
-  tracing: {}
-  metrics: {}
-  environment: {}
-  allowDirectoryList: false
+  S3: 
+    destination:
+      accessKey: vector
+      secretAccessKey: vectorPassword
+      server: 10.8.0.9
+      serverPort: 9000
+      serverProto: http
+      bucket: 3dtiles
+      region: "us-east-1"
+      style: path
+      sslEnabled: false
+      maxAttempts: 3
+      sigVersion: 4
+      storageClass: 'STANDARD'
 
-splunkIndex: ''
+  serving:
+    authorization:
+      enabled: true
+      domain: '3d'
+      url: 'http://opa-dev-opa-service.infra-services/v1/data/http/authz/decision'
 
-authorization:
-  enabled: false
-  domain: dem
-  url:
+  filebeat:
+    enabled: false
+    image: docker.elastic.co/beats/filebeat:7.12.1
+    mountPath: /usr/src/app/logs
+    pycsw:
+      mountPath: /var/log/pycsw
+      logFile: pycsw.log
+    nginxS3Gateway: 
+      mountPath: /var/log/nginx
+    elastic:
+      host: 10.8.0.8
+      port: 9200
+      protocol: http
+      username: 
+      password:
+      index: 3d-np
+      sslEnabled: false
+    kibana:
+      host: 10.8.0.8:5601
 
-image:
-  repository: nginx-s3-gateway
-  tag: v3.0.2
+S3: 
+  destination:
+    accessKey: ''
+    secretAccessKey: ''
+    server: 10.8.0.9
+    serverPort: 9000
+    serverProto: ''
+    bucket: ''
+    region: ''
+    style: ''
+    sslEnabled: false
+    maxAttempts: 
+    sigVersion: 
+    storageClass: ''
+
+serving:
+  authorization:
+    enabled: true
+    domain: '3d'
+    url: 'http://opa-dev-opa-service.infra-services/v1/data/http/authz/decision'
+
+filebeat:
+    enabled: false
+    image: docker.elastic.co/beats/filebeat:7.12.1
+    mountPath: /usr/src/app/logs
+    pycsw:
+      mountPath: /var/log/pycsw
+      logFile: pycsw.log
+    nginxS3Gateway: 
+      mountPath: /var/log/nginx
+    elastic:
+      host: 10.8.0.8
+      port: 9200
+      protocol: http
+      username: 
+      password:
+      index: 3d-np
+      sslEnabled: false
+    kibana:
+      host: 10.8.0.8:5601
 
 enabled: true
-environment: production
-initialDelaySeconds: 10
-nodePort: 30030
-replicaCount: 1
 cloudProvider:
-  dockerRegistryUrl: acrarolibotnonprod.azurecr.io
-  imagePullSecretName: acr-registry
-  flavor: openshift
+    dockerRegistryUrl: 
+    imagePullSecretName: ''
+    flavor: openshift
+
+initialDelaySeconds: 10
+
+nodePort: 30030
+
+allowDirectoryList: 'false'
+
+replicaCount: 1
+
+annotations:
+  collectord.io/index: ''
+  collectord.io/logs-output: ''
+
+image:
+  repository: 'nginx-s3-gateway'
+  tag: ''
 
 env:
   protocol: TCP
-  port: 80
+  port: 8080
   targetPort: 8080
   tracing:
     enabled: false
-    url: http://localhost:55681/v1/traces
+    url: 'http://localhost:55681/v1/trace'
   metrics:
     enabled: false
     url: http://localhost:55681/v1/metrics
@@ -41,83 +118,57 @@ resources:
   enabled: true
   value:
     limits:
-      cpu: 500m
-      memory: 900Mi
+      cpu: 100m
+      memory: 128Mi
     requests:
-      cpu: 125m
-      memory: 900Mi
+      cpu: 100m
+      memory: 128Mi
 
 ingress:
   enabled: false
-  type: nginx-kubernetes # supported values: 'nginx-org' | 'nginx-kubernetes'
-  host:
   path: /
+  host: 'localhost'
+  type: nginx-kubernetes # supported values: 'nginx-org' | 'nginx-kubernetes'
 
 route:
   enabled: true
   https: true
-  host:
+  host: 
   path: /
+  
   annotations:
     haproxy.router.openshift.io/rewrite-target: /
   useCert: false
+  
+debug: true
+corsEnabled: true
+nginxWorkerProcesses: 4
+customServerConf: "expires 4w;\n"
+customLocationConf: "proxy_no_cache 1;\n"
 
-s3:
-  bucketName: dem-int
-  accessKeyId: raster
-  secretAccessKey: rasterPassword
-  server: 10.8.0.9
-  serverPort: 9000
-  serverProto: http
-  region: us-east-1
-  style: path
-  debug: true
-  corsEnabled: true
-  nginxWorkerProcesses: 4
-  cacheMaxSize: 10g
-  cacheInactive: 60m
-  cacheValidOk: 1h
-  cacheValidNotfound: 1m
-  cacheValidForbidden: 30s
-  # customServerConf:
-  # customLocationConf:
-  # sigsVersion: 4
-  # allowDirectoryList: false
+cache:
+  maxSize: 10g
+  inactive: 60m
+  validOk: 1h
+  validNotfound: 1m
+  validForbidden: 30s
 
-aws:
-  sigsVersion: 4
-
-opa:
-  image: openpolicyagent/opa
-  imageTag: 0.29.4-envoy-3
-  port: 9191
-  resources:
+redis:
+  enabled: true
+  host: ''
+  port: 
+  sslEnabled: true
+  skipCache: 0 # 0 for false. If it contains any other value, the service will skip cache in redis
+  cacheExpirationTime: 1000
+  connectionTimeout: 100
+  sendTimeout: 100
+  readTimeout: 100
+  maxIdleTimeout: 200
+  poolSize: 100
+  authentication:
+    requirePassword: true
+    password: ''
+    username: ''
+  prefix:
     enabled: true
-    value:
-      limits:
-        cpu: 400m
-        memory: 200Mi
-      requests:
-        cpu: 100m
-        memory: 200Mi
-
-envoy:
-  image: envoyproxy/envoy
-  imageTag: v1.20.7
-  port: 6565
-  maxRequestBytes: 8192
-  requestedDomain: dem
-  resources:
-    enabled: true
-    value:
-      limits:
-        cpu: 500m
-        memory: 900Mi
-      requests:
-        cpu: 125m
-        memory: 900Mi
-
-logsFilebeat:
-  enabled: false
-  filebeatImage: docker.elastic.co/beats/filebeat:7.12.1
-  mountPath: /var/log/nginx
+    value: ''

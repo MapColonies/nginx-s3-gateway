@@ -1,27 +1,31 @@
-{{- if .Values.enabled -}}
 {{- $tracingUrl := include "nginx-s3-gateway.tracingUrl" . -}}
 {{- $metricsUrl := include "nginx-s3-gateway.metricsUrl" . -}}
+{{- $chartName := include "nginx-s3-gateway.name" . -}}
+
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ .Release.Name }}-configmap
+  name: {{ .Release.Name }}-{{ $chartName }}-configmap
 data:
-  S3_BUCKET_NAME: {{ quote .Values.s3.bucketName }}
-  S3_SERVER: {{ quote .Values.s3.server }}
-  S3_SERVER_PORT: {{ quote .Values.s3.serverPort }}
-  S3_SERVER_PROTO: {{ quote .Values.s3.serverProto }}
-  S3_REGION: {{ quote .Values.s3.region }}
-  S3_STYLE: {{ quote .Values.s3.style }}
-  DEBUG: {{ quote .Values.s3.debug }}
-  AWS_SIGS_VERSION: {{ quote .Values.aws.sigsVersion }}
-  ALLOW_DIRECTORY_LIST: {{ quote .Values.global.allowDirectoryList }}
-  CORS_ENABLED: {{ quote .Values.s3.corsEnabled }}
-  NGINX_WORKER_PROCESSES: {{ quote .Values.s3.nginxWorkerProcesses }}
-  PROXY_CACHE_MAX_SIZE: {{ quote .Values.s3.cacheMaxSize }}
-  PROXY_CACHE_INACTIVE: {{ quote .Values.s3.cacheInactive }}
-  PROXY_CACHE_VALID_OK: {{ quote .Values.s3.cacheValidOk }}
-  PROXY_CACHE_VALID_NOTFOUND: {{ quote .Values.s3.cacheValidNotfound }}
-  PROXY_CACHE_VALID_FORBIDDEN: {{ quote .Values.s3.cacheValidForbidden }}
+{{- $s3 := (include "common.s3.merged" . ) | fromYaml }}
+  AWS_ACCESS_KEY_ID: {{ quote $s3.accessKey }}
+  AWS_SECRET_ACCESS_KEY: {{ quote $s3.secretAccessKey }}
+  S3_BUCKET_NAME: {{ quote $s3.bucket }}
+  S3_SERVER: {{ quote $s3.server }}
+  S3_SERVER_PORT: {{ quote $s3.serverPort }}
+  S3_SERVER_PROTO: {{ quote $s3.serverProto }}
+  S3_REGION: {{ quote $s3.region }}
+  S3_STYLE: {{ quote $s3.style }}
+  AWS_SIGS_VERSION: {{ quote $s3.sigVersion }}
+  DEBUG: {{ quote .Values.debug }}
+  ALLOW_DIRECTORY_LIST: {{ quote .Values.allowDirectoryList }}
+  CORS_ENABLED: {{ quote .Values.corsEnabled }}
+  NGINX_WORKER_PROCESSES: {{ quote .Values.nginxWorkerProcesses }}
+  PROXY_CACHE_MAX_SIZE: {{ quote .Values.cache.maxSize }}
+  PROXY_CACHE_INACTIVE: {{ quote .Values.cache.inactive }}
+  PROXY_CACHE_VALID_OK: {{ quote .Values.cache.validOk }}
+  PROXY_CACHE_VALID_NOTFOUND: {{ quote .Values.cache.validNotfound }}
+  PROXY_CACHE_VALID_FORBIDDEN: {{ quote .Values.cache.validForbidden }}
   {{ if .Values.env.tracing.enabled }}
   TELEMETRY_TRACING_ENABLED: 'true'
   TELEMETRY_TRACING_URL: {{ $tracingUrl }}
@@ -30,4 +34,20 @@ data:
   TELEMETRY_METRICS_ENABLED: 'true'
   TELEMETRY_METRICS_URL: {{ $metricsUrl }}
   {{ end }}
-{{- end }}
+  {{ if .Values.redis.enabled }}
+  REDIS_HOST: {{ quote .Values.redis.host }}
+  REDIS_PORT: {{ quote .Values.redis.port }}
+  REDIS_SSL_ENABLED: {{ quote .Values.redis.sslEnabled }}
+  REDIS_SKIP_CACHE: {{ quote .Values.redis.skipCache }}
+  REDIS_CACHE_EXPIRATION_TIME: {{ quote .Values.redis.cacheExpirationTime }}
+  REDIS_CONNECT_TIMEOUT: {{ quote .Values.redis.connectionTimeout }}
+  REDIS_SEND_TIMEOUT: {{ quote .Values.redis.sendTimeout }}
+  REDIS_READ_TIMEOUT: {{ quote .Values.redis.readTimeout }}
+  REDIS_PASSWORD: {{ quote .Values.redis.authentication.password }}
+  {{ if .Values.redis.authentication.username }}
+  REDIS_USERNAME: {{ quote .Values.redis.authentication.username }}
+  {{ end }}
+  REDIS_REQUIRE_PASSWORD: {{ quote .Values.redis.authentication.requirePassword }}
+  REDIS_POOL_SIZE: {{ quote .Values.redis.poolSize }}
+  REDIS_MAX_IDLE_TIMEOUT: {{ quote .Values.redis.maxIdleTimeout }}
+{{ end }}

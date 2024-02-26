@@ -1,22 +1,23 @@
-{{- if .Values.enabled -}}
 {{- $releaseName := .Release.Name -}}
 {{- $chartName := include "nginx-s3-gateway.name" . -}}
 {{- $cloudProviderFlavor := include "nginx-s3-gateway.cloudProviderFlavor" . -}}
-{{- $cloudProviderDockerRegistryUrl := include "nginx-s3-gateway.cloudProviderDockerRegistryUrl" . -}}
 {{- $cloudProviderImagePullSecretName := include "nginx-s3-gateway.cloudProviderImagePullSecretName" . -}}
 {{- $tag := include "nginx-s3-gateway.tag" . -}}
+{{- $cloudProviderDockerRegistryUrl := include "nginx-s3-gateway.cloudProviderDockerRegistryUrl" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ $releaseName }}-deployment
+  name: {{ $releaseName }}-{{ $chartName }}
   labels:
     app: {{ $chartName }}
     component: {{ $chartName }}
     environment: {{ include "nginx-s3-gateway.environment" . }}
     release: {{ $releaseName }}
     {{- include "nginx-s3-gateway.labels" . | nindent 4 }}
+{{- with .Values.annotations }}
   annotations:
-    collectord.io/index: {{ quote .Values.splunkIndex }}
+{{ toYaml . | indent 4 }}
+{{- end }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
@@ -41,15 +42,16 @@ spec:
         - name: nginx-custom-conf
           configMap:
             name: {{ .Release.Name }}-custom
-        {{- if .Values.logsFilebeat.enabled }}
+        {{-  $filebeat := (include "common.filebeat.merged" . ) | fromYaml }}
+        {{- if $filebeat.enabled }}
         - name: logs
           emptyDir: {}
         - name: config
           configMap:
-            name: filebeat-config
+            name: filebeat-config-{{ .Release.Name }}
         {{- end }}
       containers:
-        - name: {{ $releaseName }}-deployment
+        - name: {{ $releaseName }}-{{ $chartName }}-deployment
           {{- with .Values.image }}
           image: {{ $cloudProviderDockerRegistryUrl }}{{ .repository }}:{{ $tag }}
           {{- end }}
@@ -58,39 +60,50 @@ spec:
           #   - sleep
           #   - infinity
           volumeMounts:
+            {{-  $serving := (include "common.serving.merged" . ) | fromYaml }}
+            {{ if $serving.authorization.enabled }}
             - name: nginx-custom-conf
               mountPath: /etc/nginx/auth.js
               subPath: auth.js
+            {{ end }}
             - name: nginx-custom-conf
               mountPath: /etc/nginx/log_format.conf
               subPath: log_format.conf
             - name: nginx-custom-conf
-              mountPath: /etc/nginx/templates/default.conf.template
-              subPath: default.conf.template 
-            - name: nginx-custom-conf
               mountPath: /etc/nginx/nginx.conf.template
               subPath: nginx.conf.template
-            {{- if .Values.s3.customServerConf }}
+            - name: nginx-custom-conf
+              mountPath: /etc/nginx/templates/default.conf.template
+              subPath: default.conf.template
+            - name: nginx-custom-conf
+              mountPath: /etc/nginx/lua/redis-get-key.lua
+              subPath: redis-get-key.lua
+            - name: nginx-custom-conf
+              mountPath: /etc/nginx/lua/redis-set-key.lua
+              subPath: redis-set-key.lua
+            {{- if .Values.customServerConf }}
             - name: nginx-custom-conf
               mountPath: /etc/nginx/templates/gateway/s3_server.conf.template
               subPath: s3_server.conf.template
             {{- end }}
-            {{- if .Values.s3.customLocationConf }}
+            {{- if .Values.customLocationConf }}
             - name: nginx-custom-conf
               mountPath: /etc/nginx/templates/gateway/s3_location.conf.template
               subPath: s3_location.conf.template
             {{- end }}
-            {{- if .Values.logsFilebeat.enabled }}
+            {{- if $filebeat.enabled }}
             - name: logs
-              mountPath: {{ .Values.logsFilebeat.mountPath }}
+              mountPath: {{ $filebeat.nginxS3Gateway.mountPath }}
             {{- end }}
           ports:
             - containerPort: {{ .Values.env.targetPort }}
           envFrom:
-            - secretRef:
-                name: {{ template "nginx-s3-gateway.secretName" . }}
             - configMapRef:
-                name: {{ .Release.Name }}-configmap
+                name: {{ .Release.Name }}-{{ .Chart.Name }}-configmap
+          {{- if .Values.resources.enabled }}
+          resources:
+            {{- toYaml .Values.resources.value | nindent 12 }}
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /health
@@ -102,19 +115,14 @@ spec:
               path: /health
               port: {{ .Values.env.targetPort }}
             initialDelaySeconds: {{ .Values.initialDelaySeconds }}
-          {{- if .Values.resources.enabled }}
-          resources:
-            {{- toYaml .Values.resources.value | nindent 12 }}
-          {{- end }}
-        {{- if .Values.logsFilebeat.enabled }}
+        {{- if $filebeat.enabled }}
         - name: filebeat
-          image: {{ .Values.logsFilebeat.filebeatImage }}
+          image: {{ $filebeat.image }}
           args: [ "-c", "/etc/filebeat.yml", "-e" ]
           volumeMounts:
             - name: logs
-              mountPath: {{ .Values.logsFilebeat.mountPath }}
+              mountPath: {{ $filebeat.nginxS3Gateway.mountPath }}
             - name: config
               mountPath: /etc/filebeat.yml
               subPath: filebeat.yml
         {{- end }}
-{{- end }}
