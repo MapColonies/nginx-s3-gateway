@@ -16,8 +16,6 @@ postgres-gis-osm2pgsql-data/
 postgres-gis-imposm-data/
 **/myvalues.yaml
 
-.vscode
-
 # Logs
 logs
 *.log
