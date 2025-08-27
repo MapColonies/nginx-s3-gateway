@@ -12,7 +12,6 @@ metadata:
   labels:
     app: {{ $chartName }}
     component: {{ $chartName }}
-    environment: {{ include "nginx-s3-gateway.environment" . }}
     release: {{ $releaseName }}
     {{- include "nginx-s3-gateway.labels" . | nindent 4 }}
   annotations:
@@ -32,6 +31,8 @@ spec:
         release: {{ $releaseName }}
         run: {{ $releaseName }}-{{ $chartName }}
         {{- include "nginx-s3-gateway.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{ include "mc-labels-and-annotations.annotations" . | nindent 8 }}
     spec:
       {{- if $cloudProviderImagePullSecretName }}
       imagePullSecrets:

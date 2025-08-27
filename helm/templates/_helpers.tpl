@@ -36,6 +36,7 @@ helm.sh/chart: {{ include "nginx-s3-gateway.chart" . }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{ include "mc-labels-and-annotations.labels" . }}
 {{- end }}
 
 {{/*
@@ -44,18 +45,9 @@ Selector labels
 {{- define "nginx-s3-gateway.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "nginx-s3-gateway.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+{{ include "mc-labels-and-annotations.selectorLabels" . }}
 {{- end }}
 
-{{/*
-Returns the environment from global if exists or from the chart's values, defaults to development
-*/}}
-{{- define "nginx-s3-gateway.environment" -}}
-{{- if .Values.global.environment }}
-    {{- .Values.global.environment -}}
-{{- else -}}
-    {{- .Values.environment | default "development" -}}
-{{- end -}}
-{{- end -}}
 {{/*
 Returns the cloud provider name from global if exists or from the chart's values, defaults to minikube
 */}}

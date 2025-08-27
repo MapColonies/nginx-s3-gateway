@@ -2,14 +2,17 @@ global:
   cloudProvider: {}
   tracing: {}
   metrics: {}
-  environment: ''
   allowDirectoryList: false
 
 splunkIndex: ''
 
+mcLabelsAndAnnotations:
+  component: backend
+  partOf: serving
+
 authorization:
   enabled: false
-  domain: dem
+  domain:
   url:
 
 image:
@@ -17,7 +20,6 @@ image:
   tag: v3.0.2
 
 enabled: true
-environment: production
 initialDelaySeconds: 10
 nodePort: 30030
 replicaCount: 1
