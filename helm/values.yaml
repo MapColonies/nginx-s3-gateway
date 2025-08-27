@@ -1,122 +1,221 @@
 global:
+  # -- Global cloud provider configuration.
   cloudProvider: {}
+  # -- Configuration for distributed tracing.
   tracing: {}
+  # -- Configuration for metrics collection.
   metrics: {}
-  environment: ''
-  allowDirectoryList: false
+  # -- Global environment setting.
+  environment: ""
+  ingress:
+    # -- Domain name for the ingress.
+    domain: ""
 
-splunkIndex: ''
-
-authorization:
-  enabled: false
-  domain: dem
-  url:
-
-image:
-  repository: nginx-s3-gateway
-  tag: v3.0.2
-
+# -- Enable or disable the deployment of this chart
 enabled: true
-environment: production
-initialDelaySeconds: 10
-nodePort: 30030
+# -- Specify the environment for this deployment
+environment: development
+# -- Number of replicas to deploy
 replicaCount: 1
+# -- Initial delay in seconds before the readiness probe starts
+initialDelaySeconds: 60
+# -- If true, triggers a rolling update when the configuration changes
+resetOnConfigChange: true
+# -- Image pull policy for all containers in the deployment
+imagePullPolicy: Always
+
+# -- String to partially override fullname template (will maintain the release name)
+nameOverride: ""
+# -- String to fully override fullname template
+fullnameOverride: ""
+
+# -- Specify the cloud provider where the chart is being deployed
 cloudProvider:
-  dockerRegistryUrl: acrarolibotnonprod.azurecr.io
-  imagePullSecretName: acr-registry
+  # -- URL of the Docker registry to pull images from
+  dockerRegistryUrl: my-registry-url
+  # -- Name of the Kubernetes secret containing the image pull credentials
+  imagePullSecretName: imagepullsecret
+  # -- Specify the flavor of the deployment
   flavor: openshift
 
-env:
-  protocol: TCP
-  port: 80
-  targetPort: 8080
-  tracing:
-    enabled: false
-    url: http://localhost:55681/v1/traces
-  metrics:
-    enabled: false
-    url: http://localhost:55681/v1/metrics
+# -- Name of the Kubernetes secret containing the CA certificate
+caSecretName: ""
+# -- Path where the CA certificate will be mounted in the container
+caPath: "/usr/local/share/ca-certificates"
+# -- Key in the CA secret that contains the certificate data
+caKey: "ca.crt"
 
+image:
+  # -- Docker image name
+  repository: nginx
+  # -- Docker image tag
+  tag: "latest"
+# -- Port on which the application will listen
+port: 8080
+# -- Port to which the service will forward traffic
+targetPort: 8080
+# -- Port on which the site status will be available
+siteStatusPort: 8081
+# -- Port to expose on each node for NodePort service type
+nodePort: 30001
 resources:
+  # -- Use custom resources
   enabled: true
   value:
     limits:
-      cpu: 500m
-      memory: 900Mi
+      # -- Pod CPU limit
+      cpu: 100m
+      # -- Pod memory limit
+      memory: 128Mi
     requests:
-      cpu: 125m
-      memory: 900Mi
+      # -- Pod CPU request
+      cpu: 100m
+      # --Pod memory request
+      memory: 128Mi
 
-ingress:
+# -- Use this property in order to add custom annotations to the Pod
+additionalPodAnnotations: {}
+
+# Add extra volumes to the Deployment, for example
+# - name: nginx-config
+#   configMap:
+#    name: 'nginx-extra-configmap'
+#
+# -- List of extra volumes that are added to the Deployment
+extraVolumes: []
+
+# Add extra volumeMounts to the Pod, for example
+# - name: nginx-config
+#   mountPath: "/etc/nginx/conf.d/default.conf"
+#   subPath: default.conf
+#
+# -- List of extra volumeMounts that are added to the NGINX container
+extraVolumeMounts: []
+
+# Add side car to the Deployment, for example
+# sidecars: |-
+#   - name: envoy
+#     image: "{{ .Values.envoy.image }}:{{ .Values.envoy.imageTag }}"
+#     volumeMounts: []
+#     args: []
+#     ports: []
+#     resources:
+#     {{- toYaml .Values.envoy.resources.value | nindent 12 }}
+#
+# -- String consists of a list of sidecars containers that are added to the Deployment
+sidecars: ""
+
+backend:
+  # -- Backend service name for proxy_pass
+  host: "backend-service"
+  # -- Backend service port
+  port: 8080
+
+  # @section -- OpenTelemetry Support
+opentelemetry:
+  # -- OpenTelemetry service name to be associated your NGINX application
+  serviceName: nginx
+  # -- OpenTelemetry Collector endpoint address
+  # exporterHost: "localhost"
+  exporterPort: 4317 # gRPC port for OpenTelemetry Collector
+  # -- OpenTelemetry sampling method
+  samplerMethod: "AlwaysOff" # AlwaysOn, AlwaysOff, TraceIdRatioBased
+  # -- OpenTelemetry sampling ratio
+  ratio: 10 # between 0 and 1
+  # -- Use OpenTelemetry parnet-based sampling
+
+# @section -- Nginx Configuration
+nginx:
+  # -- Maximum age of the cache in seconds (for the header: Access-Control-Max-Age)
+  maxAge:
+
+  # @section -- NGINX-Prometheus-Exporter Parameters
+prometheusExporter:
+  # -- Enable or disable the Prometheus exporter sidecar
   enabled: false
-  type: nginx-kubernetes # supported values: 'nginx-org' | 'nginx-kubernetes'
-  host:
-  path: /
+  image:
+    # -- Docker image name for the Prometheus exporter
+    repository: nginx/nginx-prometheus-exporter
+    # -- Docker image tag for the Prometheus exporter
+    tag: latest
+    # -- Image pull policy for the Prometheus exporter
+    pullPolicy: IfNotPresent
+  resources:
+    # -- Enable or disable resource limits and requests
+    enabled: true
+    value:
+      limits:
+        # -- CPU limit for the main container
+        cpu: 100m
+        # -- Memory limit for the main container
+        memory: 128Mi
+      requests:
+        # -- CPU request for the main container
+        cpu: 100m
+        # -- Memory request for the main container
+        memory: 128Mi
+
+authorization:
+  # -- Use authroization mechanism
+  enabled: true
+  # -- Your authorization domain
+  domain: "example"
+  # -- Authorization endpoint
+  url: "http://localhost:8181/v1/data/http/authz/decision"
 
 route:
+  # -- Expose NGINX as an Openshift route
   enabled: true
-  host:
-  path: /
+  routesMapping:
+    # -- Path of route
+    - path: /
+      # -- Host of route
+      host:
+  timeout:
+    # -- Use custom timeout duration of the route
+    enabled: false # defaults to 30s by openshift
+    # -- Set the timeout duration of the route. Defaults to 30s by Openshift
+    duration: 60s # supported units (us, ms, s, m, h, d)
+  # -- Rewrite route target
+  rewriteTarget: ""
   tls:
+    # -- Use route over HTTPS
     enabled: true
-    useCert: true
+    # -- Set the termination of the route
+    termination: edge
+    # -- Policy for traffic on insecure schemes like HTTP
+    insecureEdgeTerminationPolicy: Redirect
+    # -- Use custom certificates for the route
+    useCerts: false
+    # -- Set the certificate of the route
+    certificate: ""
+    # -- Set the key of the route
+    key: ""
+    # -- Set the CA certificate of the route
+    caCertificate: ""
 
-s3:
-  bucketName: dem-int
-  accessKeyId: raster
-  secretAccessKey: rasterPassword
-  server: 10.8.0.9
-  serverPort: 9000
-  serverProto: http
-  region: us-east-1
-  style: path
-  debug: true
-  corsEnabled: true
-  nginxWorkerProcesses: 4
-  cacheMaxSize: 10g
-  cacheInactive: 60m
-  cacheValidOk: 1h
-  cacheValidNotfound: 1m
-  cacheValidForbidden: 30s
-  # customServerConf:
-  # customLocationConf:
-  # sigsVersion: 4
-  # allowDirectoryList: false
-
-aws:
-  sigsVersion: 4
-
-opa:
-  image: openpolicyagent/opa
-  imageTag: 0.29.4-envoy-3
-  port: 9191
-  resources:
-    enabled: true
-    value:
-      limits:
-        cpu: 400m
-        memory: 200Mi
-      requests:
-        cpu: 100m
-        memory: 200Mi
-
-envoy:
-  image: envoyproxy/envoy
-  imageTag: v1.20.7
-  port: 6565
-  maxRequestBytes: 8192
-  requestedDomain: dem
-  resources:
-    enabled: true
-    value:
-      limits:
-        cpu: 500m
-        memory: 900Mi
-      requests:
-        cpu: 125m
-        memory: 900Mi
-
-logsFilebeat:
+ingress:
+  # -- Expose NGINX as an Ingress
   enabled: false
-  filebeatImage: docker.elastic.co/beats/filebeat:7.12.1
-  mountPath: /var/log/nginx
+  # -- Class name of ingress
+  ingressClassName: nginx
+  # -- Additional annotations for ingress
+  additionalAnnotations:
+    # for NGINX ingress controller
+    # kubernetes.io/ingress.class: nginx
+    # nginx.ingress.kubernetes.io/rewrite-target: /
+    #
+  ingressMapping:
+    # -- Path of ingress
+    - path: /
+      # -- Host of ingress
+      host:
+      # -- Path Type of ingreaa
+      pathType: Prefix
+  # -- Domain of ingress
+  domain: ""
+  tls:
+    # -- Use ingress over HTTPS
+    enabled: false
+    # -- Secret name of ingress that points to the relevant custom certificates
+    secretName: ""

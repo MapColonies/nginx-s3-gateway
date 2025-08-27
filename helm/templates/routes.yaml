@@ -1,0 +1,47 @@
+{{- $chartName := include "nginx.name" . -}}
+{{- $fullName := include "nginx.fullname" . -}}
+{{- $cloudProviderFlavor := include "nginx.cloudProviderFlavor" . -}}
+{{- $route := .Values.route -}}
+{{- $labels := include "nginx.labels" . }}
+{{- if and (and (.Values.enabled) (eq $cloudProviderFlavor "openshift")) (.Values.route.enabled) -}}
+{{- range $index, $routesMapping := $route.routesMapping }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  {{- if eq (len $route.routesMapping) 1 }}
+  name: {{ printf "%s-route" $fullName }}
+  {{- else }}
+  name: {{ printf "%s-route-%d" $fullName (add1 $index) }}
+  {{- end }}
+  labels:
+    {{- $labels | nindent 4 }}
+  annotations:
+    {{- if $route.rewriteTarget }}
+    haproxy.router.openshift.io/rewrite-target: {{ $route.rewriteTarget }}
+    {{- end }}
+    {{- if $route.timeout.enabled }}
+    haproxy.router.openshift.io/timeout: {{ $route.timeout.durationSeconds }}
+    {{- end }}
+spec:
+  {{- if $routesMapping.host }}
+  host: {{ $routesMapping.host }}
+  {{- end }}
+  path:  {{ $routesMapping.path | default "/" }}
+  port:
+    targetPort: nginx
+  to:
+    kind: Service
+    name: {{ printf "%s-service" $fullName }}
+  {{- if $route.tls.enabled }}
+  tls:
+    termination: {{ $route.tls.termination | quote }}
+    insecureEdgeTerminationPolicy: {{ $route.tls.insecureEdgeTerminationPolicy | quote }}
+    {{- if $route.tls.useCerts }}
+    certificate: {{ $route.tls.certificate | quote }}
+    key: {{ $route.tls.key | quote }}
+    caCertificate: {{ $route.tls.caCertificate | quote }}
+    {{- end }}
+  {{- end }}
+{{ printf "---" }}
+{{- end }}
+{{- end -}}

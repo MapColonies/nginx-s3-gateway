@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "opentelemetry": {
+      "type": "object",
+      "properties": {
+        "serviceName": {
+          "type": "string",
+          "description": "OpenTelemetry service name to be associated with your NGINX application"
+        },
+        "exporterHost": {
+          "type": "string",
+          "description": "OpenTelemetry Collector endpoint host address"
+        },
+        "exporterPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 4317,
+          "description": "gRPC port for OpenTelemetry Collector"
+        },
+        "samplerMethod": {
+          "type": "string",
+          "enum": ["AlwaysOn", "AlwaysOff", "TraceIdRatioBased"],
+          "default": "AlwaysOff",
+          "description": "OpenTelemetry sampling method"
+        },
+        "ratio": {
+          "type": "number",
+          "format": "int32",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 10,
+          "description": "OpenTelemetry sampling ratio (between 0 and 1)"
+        }
+      },
+      "additionalProperties": false,
+      "required": ["samplerMethod"],
+      "if": {
+        "properties": {
+          "samplerMethod": {
+            "enum": ["AlwaysOn", "TraceIdRatioBased"]
+          }
+        }
+      },
+      "then": {
+        "required": ["exporterHost", "exporterPort", "samplerMethod"]
+      },
+      "else": {
+        "required": ["samplerMethod"]
+      }
+    }
+  }
+}

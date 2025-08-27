@@ -1,8 +1,8 @@
-import qs from 'querystring';
+import qs from "querystring";
 
 async function opaAuth(r) {
   try {
-    if (r.variables.original_method == 'OPTIONS') {
+    if (r.variables.original_method == "OPTIONS") {
       return r.return(204);
     }
 
@@ -15,9 +15,9 @@ async function opaAuth(r) {
       },
     };
 
-    const response = await r.subrequest('/opa', {
+    const response = await r.subrequest("/opa", {
       body: JSON.stringify(body),
-      method: 'POST',
+      method: "POST",
     });
 
     if (response.status > 500) {
@@ -27,21 +27,33 @@ async function opaAuth(r) {
     const opaResult = JSON.parse(response.responseText).result;
     if (!opaResult.allowed) {
       r.error(opaResult.reason);
-      const returnCode = opaResult.reason.includes('no token supplied') ? 401 : 403;
+      const returnCode = opaResult.reason.includes("no token supplied")
+        ? 401
+        : 403;
 
+      r.variables.opa_result = "false";
+      r.variables.opa_reason = opaResult.reason;
       return r.return(returnCode);
     }
+    r.variables.opa_result = "true";
+
+    r.variables.opa_reason = "";
 
     r.return(204);
   } catch (error) {
     r.error(error);
+    r.variables.opa_result = "error";
     r.return(500);
   }
 }
 
 function jwt(data) {
   if (data) {
-    var parts = data.split('.').slice(0, 2).map((v) => Buffer.from(v, 'base64url').toString()).map(JSON.parse);
+    var parts = data
+      .split(".")
+      .slice(0, 2)
+      .map((v) => Buffer.from(v, "base64url").toString())
+      .map(JSON.parse);
     return { headers: parts[0], payload: parts[1] };
   } else {
     return;
@@ -51,13 +63,13 @@ function jwt(data) {
 function jwtPayloadSub(r) {
   try {
     let token;
-    if (r.args['token']) token = jwt(r.args['token']);
-    else if (r.headersIn['x-api-key']) token = jwt(r.headersIn['x-api-key']);
-    else return '';
+    if (r.args["token"]) token = jwt(r.args["token"]);
+    else if (r.headersIn["x-api-key"]) token = jwt(r.headersIn["x-api-key"]);
+    else return "";
 
     return token.payload.sub;
   } catch (error) {
-    return '';
+    return "";
   }
 }
 

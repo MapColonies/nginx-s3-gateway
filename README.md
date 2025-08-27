@@ -2,6 +2,10 @@
 
 Configuring `nginxinc/nginx-s3-gateway` image to act as an authenticating and caching gateway for read-only requests (GET/HEAD) to the S3 API.
 
+## Application Architecture Overview
+
+![Application Architecture Overview](Nginx-S3.png)
+
 ## Why?
 
 * Providing an authentication gateway using an alternative authentication system to S3

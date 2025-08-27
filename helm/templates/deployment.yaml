@@ -1,120 +1,115 @@
 {{- if .Values.enabled -}}
-{{- $releaseName := .Release.Name -}}
-{{- $chartName := include "nginx-s3-gateway.name" . -}}
-{{- $cloudProviderFlavor := include "nginx-s3-gateway.cloudProviderFlavor" . -}}
-{{- $cloudProviderDockerRegistryUrl := include "nginx-s3-gateway.cloudProviderDockerRegistryUrl" . -}}
-{{- $cloudProviderImagePullSecretName := include "nginx-s3-gateway.cloudProviderImagePullSecretName" . -}}
-{{- $tag := include "nginx-s3-gateway.tag" . -}}
+{{- $fullName := include "nginx.fullname" . -}}
+{{- $chartName := include "nginx.name" . -}}
+{{- $cloudProviderDockerRegistryUrl := include "nginx.cloudProviderDockerRegistryUrl" . -}}
+{{- $cloudProviderImagePullSecretName := include "nginx.cloudProviderImagePullSecretName" . -}}
+{{- $prometheusExporterPort := include "prometheusExporter.targetPort" . -}}
+{{- $listOfSubPaths := include "listOfSubPaths" . | fromJsonArray -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ $releaseName }}-{{ $chartName }}
+  name: {{ printf "%s-deployment" (include "nginx.fullname" .) }}
   labels:
-    app: {{ $chartName }}
-    component: {{ $chartName }}
-    environment: {{ include "nginx-s3-gateway.environment" . }}
-    release: {{ $releaseName }}
-    {{- include "nginx-s3-gateway.labels" . | nindent 4 }}
-  annotations:
-    collectord.io/index: {{ quote .Values.splunkIndex }}
+    app: {{ $fullName | quote }}
+    component: nginx-deployment
+    environment: {{ include "nginx.environment" . }}
+    release: {{ .Release.Name }}
+    {{- include "nginx.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: {{ $chartName }}
-      release: {{ $releaseName }}
-      run: {{ $releaseName }}-{{ $chartName }}
-      {{- include "nginx-s3-gateway.selectorLabels" . | nindent 6 }}
+      app: {{ $fullName | quote }}
+      release: {{ .Release.Name }}
+      run: {{ .Release.Name }}-nginx
   template:
     metadata:
       labels:
-        app: {{ $chartName }}
-        release: {{ $releaseName }}
-        run: {{ $releaseName }}-{{ $chartName }}
-        {{- include "nginx-s3-gateway.selectorLabels" . | nindent 8 }}
+        app: {{ $fullName | quote }}
+        release: {{ .Release.Name }}
+        run: {{ .Release.Name }}-nginx
+      annotations:
+        {{- if .Values.prometheusExporter.enabled }}
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: {{ $prometheusExporterPort | quote }}
+        {{- end}}
+        {{- if .Values.additionalPodAnnotations }}
+        {{- toYaml .Values.additionalPodAnnotations | nindent 8 }}
+        {{- end }}
     spec:
-      {{- if $cloudProviderImagePullSecretName }}
+    {{- if $cloudProviderImagePullSecretName }}
       imagePullSecrets:
         - name: {{ $cloudProviderImagePullSecretName | quote }}
-      {{- end }}
+    {{- end }}
       volumes:
-        - name: nginx-custom-conf
-          configMap:
-            name: {{ $releaseName }}-{{ $chartName }}-custom-configmap
-        {{- if .Values.logsFilebeat.enabled }}
-        - name: logs
-          emptyDir: {}
-        - name: config
-          configMap:
-            name: filebeat-config
-        {{- end }}
-      containers:
-        - name: {{ $chartName }}
-          {{- with .Values.image }}
-          image: {{ $cloudProviderDockerRegistryUrl }}{{ .repository }}:{{ $tag }}
+        - name: nginx-base-config
+          configMap:	
+            name: {{ printf "%s-base-configmap" (include "nginx.fullname" .) }}
+          {{- if .Values.extraVolumes }}
+            {{ tpl (toYaml .Values.extraVolumes) . | nindent 8 }}
           {{- end }}
-          # For debugging uncomment the following lines
-          # command:
-          #   - sleep
-          #   - infinity
+      containers:
+        - name: {{ $fullName | quote }}
+          {{- with .Values.image }}
+          image: {{ $cloudProviderDockerRegistryUrl }}{{ .repository }}:{{ .tag }}
+          {{- end }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           volumeMounts:
-            - name: nginx-custom-conf
-              mountPath: /etc/nginx/auth.js
-              subPath: auth.js
-            - name: nginx-custom-conf
-              mountPath: /etc/nginx/log_format.conf
+            {{ if not (has "default.conf" $listOfSubPaths ) }}
+            - name: nginx-base-config
+              mountPath: "/etc/nginx/conf.d/default.conf"
+              subPath: default.conf
+            {{- end -}}
+            {{ if not (has "nginx.conf" $listOfSubPaths )}}
+            - name: nginx-base-config
+              mountPath: "/etc/nginx/nginx.conf"
+              subPath: nginx.conf
+            {{- end -}}
+            {{ if not (has "log_format.conf" $listOfSubPaths )}}
+            - name: nginx-base-config
+              mountPath: "/etc/nginx/log_format.conf"
               subPath: log_format.conf
-            - name: nginx-custom-conf
-              mountPath: /etc/nginx/templates/default.conf.template
-              subPath: default.conf.template 
-            - name: nginx-custom-conf
-              mountPath: /etc/nginx/nginx.conf.template
-              subPath: nginx.conf.template
-            {{- if .Values.s3.customServerConf }}
-            - name: nginx-custom-conf
-              mountPath: /etc/nginx/templates/gateway/s3_server.conf.template
-              subPath: s3_server.conf.template
-            {{- end }}
-            {{- if .Values.s3.customLocationConf }}
-            - name: nginx-custom-conf
-              mountPath: /etc/nginx/templates/gateway/s3_location.conf.template
-              subPath: s3_location.conf.template
-            {{- end }}
-            {{- if .Values.logsFilebeat.enabled }}
-            - name: logs
-              mountPath: {{ .Values.logsFilebeat.mountPath }}
-            {{- end }}
+            {{- end -}}
+              {{- if .Values.extraVolumeMounts }}
+                {{ toYaml .Values.extraVolumeMounts | nindent 12 }}
+              {{- end }} 
           ports:
-            - containerPort: {{ .Values.env.targetPort }}
-          envFrom:
-            - secretRef:
-                name: {{ template "nginx-s3-gateway.secretName" . }}
-            - configMapRef:
-                name: {{ $releaseName }}-{{ $chartName }}-configmap
+            - name: http
+              containerPort: {{ .Values.targetPort }}
+              protocol: TCP
           livenessProbe:
-            httpGet:
-              path: /health
-              port: {{ .Values.env.targetPort }}
             initialDelaySeconds: {{ .Values.initialDelaySeconds }}
-            periodSeconds: 5
-          readinessProbe:
             httpGet:
-              path: /health
-              port: {{ .Values.env.targetPort }}
-            initialDelaySeconds: {{ .Values.initialDelaySeconds }}
+              path: /nginx_status
+              port: {{ .Values.siteStatusPort }}
           {{- if .Values.resources.enabled }}
           resources:
             {{- toYaml .Values.resources.value | nindent 12 }}
           {{- end }}
-        {{- if .Values.logsFilebeat.enabled }}
-        - name: filebeat
-          image: {{ .Values.logsFilebeat.filebeatImage }}
-          args: [ "-c", "/etc/filebeat.yml", "-e" ]
-          volumeMounts:
-            - name: logs
-              mountPath: {{ .Values.logsFilebeat.mountPath }}
-            - name: config
-              mountPath: /etc/filebeat.yml
-              subPath: filebeat.yml
+          {{- if .Values.prometheusExporter.enabled }}
+        - name: nginx-prometheus-exporter
+          {{- with .Values.prometheusExporter.image }}
+          image: {{ $cloudProviderDockerRegistryUrl }}{{ .repository }}:{{ .tag }}
+          {{- end }}
+          args: ["-nginx.scrape-uri=http://localhost:8081/nginx_status"]
+          imagePullPolicy: {{ .Values.prometheusExporter.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $prometheusExporterPort }}
+              protocol: TCP
+          # Note: if the Prometheus Exporter container isn't live the entire Pod
+          # (including the NGINX container) will restart
+          livenessProbe:
+            initialDelaySeconds: {{ .Values.initialDelaySeconds }}
+            httpGet:
+              path: /
+              port: {{ $prometheusExporterPort }}
+          {{- if .Values.prometheusExporter.resources.enabled }}
+          resources:
+            {{- toYaml .Values.prometheusExporter.resources.value | nindent 12 }}
+          {{- end }}
+          {{- end }}
+        {{- if .Values.sidecars }}
+        {{ tpl (.Values.sidecars) . | nindent 8 }}
         {{- end }}
 {{- end }}

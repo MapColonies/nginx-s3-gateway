@@ -1,35 +1,47 @@
-{{ if .Values.ingress.enabled -}}
-{{- $releaseName := .Release.Name -}}
-{{- $chartName := include "nginx-s3-gateway.name" . -}}
+{{- if and (.Values.enabled) (.Values.ingress.enabled) -}}
+{{- $context := .Values -}}
+{{- $fullName := include "nginx.fullname" . -}}
+{{- $ingress := .Values.ingress -}}
+{{- $labels := include "nginx.labels" . }}
+{{- $domain := .Values.ingress.domain | default .Values.global.ingress.domain  -}}
+{{- range $index, $ingressMapping := $ingress.ingressMapping }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ $releaseName }}-{{ $chartName }}
   labels:
-    app: {{ .Chart.Name }}
-    chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
-    release: "{{ .Release.Name }}"
+    {{- $labels | nindent 4 }}
+  {{- if eq (len $ingress.ingressMapping) 1 }}
+  name: {{ printf "%s-ingress" $fullName }}
+  {{- else }}
+  name: {{ printf "%s-ingress-%d" $fullName (add1 $index) }}
+  {{- end }}
   annotations:
-    kubernetes.io/ingress.class: nginx
-    {{- if eq .Values.ingress.type "nginx-kubernetes" }}
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-    {{- end }}
-    {{- if eq .Values.ingress.type "nginx-org" }}
-    nginx.org/mergeable-ingress-type: "minion"
-    nginx.org/rewrites: "serviceName={{ .Release.Name }} rewrite=/"
-    {{- end }}
+    {{- toYaml $ingress.additionalAnnotations | nindent 4 }}
 spec:
+  ingressClassName: {{ $ingress.ingressClassName | quote }}
+  {{- if $ingress.tls.enabled }}
+  tls:
+  - hosts:
+    - {{ $ingressMapping.host | quote }}
+    secretName: {{ $ingress.tls.secretName }}
+  {{- end }}
   rules:
   - http:
       paths:
-      - path: {{ .Values.ingress.path }}{{ .Release.Name }}{{- if eq .Values.ingress.type "nginx-kubernetes" }}(/|$)(.*){{- end }}
-        pathType: Prefix
+      - path: {{ $ingressMapping.path }}
+        pathType: {{ $ingressMapping.pathType }}
         backend:
           service:
-            name: {{ .Release.Name }}
+            name: {{ printf "%s-service" $fullName }}
             port:
-              number: {{ .Values.env.targetPort }}
-    {{- if .Values.ingress.host }}
-    host: {{ .Values.ingress.host | quote }}
-    {{ end }}
-{{ end }}
+              number: {{ $context.port }}
+  {{- if $ingressMapping.host }}
+    {{- if $domain }}
+    host: {{ printf "%s.%s" $ingressMapping.host $domain }}
+    {{- else }}
+    host: {{ printf "%s" $ingressMapping.host }}
+    {{- end }}
+  {{- end }}
+{{ printf "---" }}
+{{- end }}
+{{- end -}}

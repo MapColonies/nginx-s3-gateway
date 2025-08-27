@@ -1,5 +1,6 @@
 apiVersion: v2
 name: nginx-s3-gateway
 description: Helm chart for nginx-s3-gateway
+type: application
 version: 3.0.2
 appVersion: 3.0.2
