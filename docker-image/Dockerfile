@@ -1,4 +1,4 @@
-FROM nginxinc/nginx-unprivileged:1.28.0-alpine3.21-otel
+FROM nginxinc/nginx-s3-gateway:unprivileged-oss-20250825
 
 USER root
 
