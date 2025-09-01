@@ -126,6 +126,9 @@ Returns the port for NGINX Prometheus Exporter
 {{/*
 Generate OpenTelemetry trace configuration
 */}}
+
+{{/*
+# TODO: enable in otel version: 
 {{- define "nginx.otelTrace" -}}
 {{- if eq .Values.opentelemetry.samplerMethod "AlwaysOn" -}}
 otel_trace on;
@@ -135,3 +138,4 @@ otel_trace $ratio_sampler;
 otel_trace off;
 {{- end -}}
 {{- end -}}
+*/}}

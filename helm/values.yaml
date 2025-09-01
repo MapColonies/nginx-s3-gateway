@@ -157,7 +157,7 @@ prometheusExporter:
 
 authorization:
   # -- Use authroization mechanism
-  enabled: true
+  enabled: false
   # -- Your authorization domain
   domain: "example"
   # -- Authorization endpoint
