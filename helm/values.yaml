@@ -33,7 +33,7 @@ environment:
 
 image:
   repository: nginx-s3-gateway
-  tag: latest
+  tag: v4.0.0
 
 nodePort: 30030
 replicaCount: 1
