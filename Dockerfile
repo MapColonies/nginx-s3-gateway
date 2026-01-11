@@ -7,11 +7,11 @@ WORKDIR /work
 ARG BASE_NGINX_VERSION=1.25.3
 
 ## BASE NGINX
-RUN wget https://openresty.org/download/nginx-${BASE_NGINX_VERSION}.tar.gz \
+RUN wget --no-check-certificate https://openresty.org/download/nginx-${BASE_NGINX_VERSION}.tar.gz \
     && tar -xzvf nginx-${BASE_NGINX_VERSION}.tar.gz
 
 ## LUA JIT
-RUN wget https://github.com/openresty/luajit2/archive/refs/tags/v2.1-20231117.tar.gz \
+RUN wget --no-check-certificate https://github.com/openresty/luajit2/archive/refs/tags/v2.1-20231117.tar.gz \
     && tar -xzvf v2.1-20231117.tar.gz \ 
     && cd luajit2-2.1-20231117 \
     && make \
@@ -21,16 +21,16 @@ ENV LUAJIT_LIB=/usr/local/lib/
 ENV LUAJIT_INC=/usr/local/include/luajit-2.1
 
 ## CLONE OPENRESTY REPOS
-RUN wget https://github.com/vision5/ngx_devel_kit/archive/refs/tags/v0.3.3.tar.gz \
+RUN wget --no-check-certificate https://github.com/vision5/ngx_devel_kit/archive/refs/tags/v0.3.3.tar.gz \
     && tar -xzvf v0.3.3.tar.gz \
-    && wget https://github.com/openresty/lua-nginx-module/archive/refs/tags/v0.10.26rc1.tar.gz \
+    && wget --no-check-certificate https://github.com/openresty/lua-nginx-module/archive/refs/tags/v0.10.26rc1.tar.gz \
     && tar -xzvf v0.10.26rc1.tar.gz \
-    && wget https://github.com/openresty/srcache-nginx-module/archive/refs/tags/v0.33.tar.gz \
+    && wget --no-check-certificate https://github.com/openresty/srcache-nginx-module/archive/refs/tags/v0.33.tar.gz \
     && tar -xzvf v0.33.tar.gz \
     && rm -rf v0.33.tar.gz \
-    && wget https://github.com/openresty/set-misc-nginx-module/archive/refs/tags/v0.33.tar.gz \
+    && wget --no-check-certificate https://github.com/openresty/set-misc-nginx-module/archive/refs/tags/v0.33.tar.gz \
     && tar -xzvf v0.33.tar.gz \
-    && wget https://github.com/openresty/headers-more-nginx-module/archive/refs/tags/v0.36.tar.gz \
+    && wget --no-check-certificate https://github.com/openresty/headers-more-nginx-module/archive/refs/tags/v0.36.tar.gz \
     && tar -xzvf v0.36.tar.gz
 
 ## COMPILE NGINX FOR THE DYNAMIC MODULES
@@ -56,6 +56,12 @@ RUN cd nginx-${BASE_NGINX_VERSION} \
     && make install
 
 ## ADD-ONS THAT DO NOT NEED COMPILATION
+
+RUN apt-get update && apt-get install -y \
+    git \
+    ca-certificates
+RUN git config --global http.sslCAinfo /etc/ssl/certs/ca-certificates.crt
+RUN git config --global http.sslVerify false
 RUN git clone https://github.com/openresty/lua-resty-core.git \
     && cd lua-resty-core \
     && make install PREFIX=/etc/nginx \
