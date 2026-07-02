@@ -1,47 +1,33 @@
-{{- $chartName := include "nginx.name" . -}}
-{{- $fullName := include "nginx.fullname" . -}}
-{{- $cloudProviderFlavor := include "nginx.cloudProviderFlavor" . -}}
-{{- $route := .Values.route -}}
-{{- $labels := include "nginx.labels" . }}
-{{- if and (and (.Values.enabled) (eq $cloudProviderFlavor "openshift")) (.Values.route.enabled) -}}
-{{- range $index, $routesMapping := $route.routesMapping }}
+{{- $cloudProviderFlavor := include "nginx-s3-gateway.cloudProviderFlavor" . -}}
+{{- $fullName := include "nginx-s3-gateway.fullname" . -}}
+{{- if and (eq $cloudProviderFlavor "openshift") (.Values.route.enabled) -}}
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  {{- if eq (len $route.routesMapping) 1 }}
-  name: {{ printf "%s-route" $fullName }}
-  {{- else }}
-  name: {{ printf "%s-route-%d" $fullName (add1 $index) }}
-  {{- end }}
-  labels:
-    {{- $labels | nindent 4 }}
+  name: {{ $fullName }}
   annotations:
-    {{- if $route.rewriteTarget }}
-    haproxy.router.openshift.io/rewrite-target: {{ $route.rewriteTarget }}
+    {{- if .Values.route.rewriteTarget }}
+    haproxy.router.openshift.io/rewrite-target: {{ .Values.route.rewriteTarget }}
     {{- end }}
-    {{- if $route.timeout.enabled }}
-    haproxy.router.openshift.io/timeout: {{ $route.timeout.durationSeconds }}
+    {{- if .Values.route.timeout.enabled }}
+    haproxy.router.openshift.io/timeout: {{ .Values.route.timeout.duration }}
     {{- end }}
 spec:
-  {{- if $routesMapping.host }}
-  host: {{ $routesMapping.host }}
+  {{- if .Values.route.host }}
+  host: {{ .Values.route.host }}
   {{- end }}
-  path:  {{ $routesMapping.path | default "/" }}
-  port:
-    targetPort: nginx
+  path: {{ .Values.route.path | default "/" }}
   to:
     kind: Service
-    name: {{ printf "%s-service" $fullName }}
-  {{- if $route.tls.enabled }}
+    name: {{ $fullName }}
+  {{- if .Values.route.tls.enabled }}
   tls:
-    termination: {{ $route.tls.termination | quote }}
-    insecureEdgeTerminationPolicy: {{ $route.tls.insecureEdgeTerminationPolicy | quote }}
-    {{- if $route.tls.useCerts }}
-    certificate: {{ $route.tls.certificate | quote }}
-    key: {{ $route.tls.key | quote }}
-    caCertificate: {{ $route.tls.caCertificate | quote }}
+    termination: {{ .Values.route.tls.termination | quote }}
+    insecureEdgeTerminationPolicy: {{ .Values.route.tls.insecureEdgeTerminationPolicy | quote }}
+    {{- if .Values.route.tls.useCerts }}
+    certificate: {{ .Values.route.tls.certificate | quote }}
+    key: {{ .Values.route.tls.key | quote }}
+    caCertificate: {{ .Values.route.tls.caCertificate | quote }}
     {{- end }}
-  {{- end }}
-{{ printf "---" }}
-{{- end }}
+  {{- end -}}
 {{- end -}}

@@ -1,45 +1,31 @@
-
-{{- if .Values.enabled -}}
-{{- $fullName := include "nginx.fullname" . -}}
 {{- $releaseName := .Release.Name -}}
-{{- $chartName := include "nginx.name" . -}}
-{{- $cloudProviderFlavor := include "nginx.cloudProviderFlavor" . -}}
-{{- $prometheusExporterPort := include "prometheusExporter.targetPort" . -}}
+{{- $chartName := include "nginx-s3-gateway.name" . -}}
+{{- $cloudProviderFlavor := include "nginx-s3-gateway.cloudProviderFlavor" . -}}
+{{- $fullNeme := include "nginx-s3-gateway.fullname" . -}}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ printf "%s-service" (include "nginx.fullname" .) }}
+  name: {{ $fullNeme }}
   labels:
-    app: {{ $fullName | quote }}
-    component: nginx-service
-    environment: {{ include "nginx.environment" . }}
-    release: {{ .Release.Name }}
-    {{- include "nginx.labels" . | nindent 4 }}
+    app: {{ $chartName }}
+    component: {{ $chartName }}
+    environment: {{ include "nginx-s3-gateway.environment" . }}
+    release: {{ $releaseName }}
+    {{- include "nginx-s3-gateway.labels" . | nindent 4 }}
 spec:
-  # In case cloudProavider=azure
-  {{- if eq $cloudProviderFlavor "azure" }}
-  type: ClusterIP
-  {{- end }}
-  # In case cloudProvider=minikube
   {{- if eq $cloudProviderFlavor "minikube" }}
   type: NodePort
   {{- end }}
   ports:
-    - port: {{ .Values.port }}
-      targetPort: {{ .Values.targetPort }}
-      protocol: TCP
-      name: nginx
+    - name: internal
+      port: {{ .Values.env.port }}
+      targetPort: {{ .Values.env.targetPort }}
+      protocol: {{ .Values.env.protocol }}
       {{- if eq $cloudProviderFlavor "minikube" }}
       nodePort: {{ .Values.nodePort }}
       {{- end }}
-      {{- if .Values.prometheusExporter.enabled }}
-    - port: {{ $prometheusExporterPort }}
-      targetPort: {{ $prometheusExporterPort }}
-      protocol: TCP
-      name: prometheus-exporter
-      {{- end }}
   selector:
-    app: {{ $fullName | quote }}
-    release: {{ .Release.Name }}
-    run: {{ .Release.Name }}-nginx
-{{- end }}
+    app: {{ $chartName }}
+    release: {{ $releaseName }}
+    run: {{ $fullNeme }}
+    {{- include "nginx-s3-gateway.selectorLabels" . | nindent 4 }}

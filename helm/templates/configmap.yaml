@@ -1,10 +1,54 @@
+{{- $fullName := include "nginx-s3-gateway.fullname" . -}}
+{{- $tracing := (include "merged.tracing" . ) | fromYaml }}
+{{- $metrics := (include "merged.metrics" . ) | fromYaml }}
+{{- $S3 := (include "merged.S3" . ) | fromYaml }}
+
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ printf "%s-base-configmap" (include "nginx.fullname" .) }}
-  labels:
-    {{- include "nginx.labels" . | nindent 4 }}  
+  name: {{ $fullName }}
 data:
-  default.conf: {{ tpl (.Files.Get "config/default.conf") . | quote }}
-  nginx.conf: {{ tpl (.Files.Get "config/nginx.conf") . | quote }}
-  log_format.conf: {{ tpl (.Files.Get "config/log_format.conf") . | quote }}
+  AWS_ACCESS_KEY_ID: {{ quote $S3.accessKey }}
+  AWS_SECRET_ACCESS_KEY: {{ quote $S3.secretAccessKey }}
+  S3_BUCKET_NAME: {{ quote $S3.bucket }}
+  S3_SERVER: {{ quote $S3.server }}
+  S3_SERVER_PORT: {{ quote $S3.serverPort }}
+  S3_SERVER_PROTO: {{ quote $S3.serverProto }}
+  S3_REGION: {{ quote $S3.region }}
+  S3_STYLE: {{ quote $S3.style }}
+  AWS_SIGS_VERSION: {{ quote $S3.sigVersion }}
+  DEBUG: {{ quote .Values.env.debug }}
+  ALLOW_DIRECTORY_LIST: {{ quote .Values.env.allowDirectoryList }}
+  CORS_ENABLED: {{ quote .Values.env.corsEnabled }}
+  NGINX_WORKER_PROCESSES: {{ quote .Values.env.nginxWorkerProcesses }}
+  PROXY_CACHE_MAX_SIZE: {{ quote .Values.cache.maxSize }}
+  PROXY_CACHE_INACTIVE: {{ quote .Values.cache.inactive }}
+  PROXY_CACHE_VALID_OK: {{ quote .Values.cache.validOk }}
+  PROXY_CACHE_VALID_NOTFOUND: {{ quote .Values.cache.validNotFound }}
+  PROXY_CACHE_VALID_FORBIDDEN: {{ quote .Values.cache.validForbidden }}
+  PROXY_CACHE_SLICE_SIZE: {{ quote .Values.cache.sliceSize }}
+  {{ if $tracing.enabled }}
+  TELEMETRY_TRACING_ENABLED: 'true'
+  TELEMETRY_TRACING_URL: {{ $tracing.url }}
+  {{ end }}
+  {{ if $metrics.enabled }}
+  TELEMETRY_METRICS_ENABLED: 'true'
+  TELEMETRY_METRICS_URL: {{ $metrics.url }}
+  {{ end }}
+  {{ if .Values.redis.enabled }}
+  REDIS_HOST: {{ quote .Values.redis.host }}
+  REDIS_PORT: {{ quote .Values.redis.port }}
+  REDIS_SSL_ENABLED: {{ quote .Values.redis.sslEnabled }}
+  REDIS_SKIP_CACHE: {{ quote .Values.redis.skipCache }}
+  REDIS_CACHE_EXPIRATION_TIME: {{ quote .Values.redis.cacheExpirationTime }}
+  REDIS_CONNECT_TIMEOUT: {{ quote .Values.redis.connectionTimeout }}
+  REDIS_SEND_TIMEOUT: {{ quote .Values.redis.sendTimeout }}
+  REDIS_READ_TIMEOUT: {{ quote .Values.redis.readTimeout }}
+  REDIS_PASSWORD: {{ quote .Values.redis.authentication.password }}
+  {{ if .Values.redis.authentication.username }}
+  REDIS_USERNAME: {{ quote .Values.redis.authentication.username }}
+  {{ end }}
+  REDIS_REQUIRE_PASSWORD: {{ quote .Values.redis.authentication.requirePassword }}
+  REDIS_POOL_SIZE: {{ quote .Values.redis.poolSize }}
+  REDIS_MAX_IDLE_TIMEOUT: {{ quote .Values.redis.maxIdleTimeout }}
+{{ end }}

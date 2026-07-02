@@ -1,47 +1,35 @@
-{{- if and (.Values.enabled) (.Values.ingress.enabled) -}}
-{{- $context := .Values -}}
-{{- $fullName := include "nginx.fullname" . -}}
-{{- $ingress := .Values.ingress -}}
-{{- $labels := include "nginx.labels" . }}
-{{- $domain := .Values.ingress.domain | default .Values.global.ingress.domain  -}}
-{{- range $index, $ingressMapping := $ingress.ingressMapping }}
+{{- $fullName := include "nginx-s3-gateway.fullname" . -}}
+{{- $releaseName := .Release.Name -}}
+{{- $chartName := include "nginx-s3-gateway.name" . -}}
+{{- if .Values.ingress.enabled -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  labels:
-    {{- $labels | nindent 4 }}
-  {{- if eq (len $ingress.ingressMapping) 1 }}
-  name: {{ printf "%s-ingress" $fullName }}
-  {{- else }}
-  name: {{ printf "%s-ingress-%d" $fullName (add1 $index) }}
-  {{- end }}
+  name: {{ $fullName }}
   annotations:
-    {{- toYaml $ingress.additionalAnnotations | nindent 4 }}
+    kubernetes.io/ingress.class: "nginx"
+    nginx.org/mergeable-ingress-type: "minion"
+    nginx.org/rewrites: 'serviceName={{ $fullName }} rewrite=/'    
+    nginx.org/location-snippets: |
+      if ($request_method = OPTIONS) {
+        return 204;
+      }
+    {{- if .Values.ingress.cors.enabled }}
+      add_header 'Access-Control-Allow-Origin' '{{- .Values.ingress.cors.origin -}}';
+      add_header 'Access-Control-Max-Age' 3600;
+      add_header 'Access-Control-Expose-Headers' 'Content-Length';
+      add_header 'Access-Control-Allow-Headers' '*';
+    {{- end }}
 spec:
-  ingressClassName: {{ $ingress.ingressClassName | quote }}
-  {{- if $ingress.tls.enabled }}
-  tls:
-  - hosts:
-    - {{ $ingressMapping.host | quote }}
-    secretName: {{ $ingress.tls.secretName }}
-  {{- end }}
   rules:
   - http:
       paths:
-      - path: {{ $ingressMapping.path }}
-        pathType: {{ $ingressMapping.pathType }}
+      - path: {{ .Values.ingress.path }}
+        pathType: Prefix
         backend:
           service:
-            name: {{ printf "%s-service" $fullName }}
+            name: {{ $fullName }}
             port:
-              number: {{ $context.port }}
-  {{- if $ingressMapping.host }}
-    {{- if $domain }}
-    host: {{ printf "%s.%s" $ingressMapping.host $domain }}
-    {{- else }}
-    host: {{ printf "%s" $ingressMapping.host }}
-    {{- end }}
-  {{- end }}
-{{ printf "---" }}
-{{- end }}
+              number: {{ .Values.env.port }}
+    host: {{ .Values.ingress.host | quote }}
 {{- end -}}
