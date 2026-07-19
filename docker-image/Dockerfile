@@ -23,20 +23,13 @@ COPY --from=gateway-source /etc/nginx/include /etc/nginx/include
 COPY --from=gateway-source /etc/nginx/templates /etc/nginx/templates
 COPY --from=gateway-source /etc/nginx/conf.d /etc/nginx/conf.d
 COPY --from=gateway-source /docker-entrypoint.d /docker-entrypoint.d
-
-# Use the gateway's own entrypoint (replacing the base image's simpler one). It
-# derives the variables the config templates depend on before running
-# /docker-entrypoint.d/*: S3_UPSTREAM and DNS_RESOLVERS (needed by the
-# dynamic-DNS upstream), CORS_ALLOWED_ORIGIN / CORS_ALLOW_PRIVATE_NETWORK_ACCESS,
-# LIMIT_METHODS_TO and S3_HOST_HEADER. Without it these render empty and nginx
-# fails to start.
 COPY --from=gateway-source /docker-entrypoint.sh /docker-entrypoint.sh
 
 # ENV defaults the gateway image carries but the OTel base does not. The gateway
 # entrypoint/templates read these; helm or runtime env overrides any of them.
-ENV CORS_ENABLED=0 \
-    CORS_ALLOW_PRIVATE_NETWORK_ACCESS= \
-    DIRECTORY_LISTING_PATH_PREFIX= \
+# (CORS_ENABLED / CORS_ALLOW_PRIVATE_NETWORK_ACCESS are omitted: the gateway
+# entrypoint always exports them, so a default here would be dead weight.)
+ENV DIRECTORY_LISTING_PATH_PREFIX= \
     STRIP_LEADING_DIRECTORY_PATH= \
     PREFIX_LEADING_DIRECTORY_PATH= \
     PROXY_CACHE_MAX_SIZE=10g \
