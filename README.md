@@ -26,12 +26,12 @@ The image is assembled in a multi-stage `docker-image/Dockerfile`:
    configuration: the njs scripts (`include/`), config templates (`templates/`)
    and the entrypoint hooks (`docker-entrypoint.d/`).
 
-2. **Final image** — built on `nginxinc/nginx-unprivileged:1.28.0-alpine3.21-otel`,
-   which provides the nginx 1.28.0 binary together with matching OpenTelemetry,
+2. **Final image** — built on `nginxinc/nginx-unprivileged:1.29.8-alpine3.23-otel`,
+   which provides the nginx 1.29.x binary together with matching OpenTelemetry,
    njs and xslt modules. The gateway configuration from stage 1 is copied in
    **without** its compiled modules or `nginx.conf`, so the OTel base's own
-   ABI-matched 1.28.0 modules are used. (The gateway image ships nginx 1.29.0,
-   whose `.so` modules are not binary-compatible with the 1.28.0 runtime.)
+   modules are used. The base shares the gateway image's nginx minor (1.29), so
+   the njs scripts and config templates run on a matching runtime.
 
 3. **MapColonies customizations** — `auth.js` (OPA/JWT authorization),
    `status_site.conf` (stub-status endpoint) and two entrypoint hooks
@@ -101,5 +101,5 @@ The image is built and smoke-tested locally (module load / njs) before release; 
 
 ## Future Considerations
 
-* Re-add Lua/Redis response caching (OpenResty `srcache` + `lua-resty-redis`) built against the 1.28.0 runtime.
+* Re-add Lua/Redis response caching (OpenResty `srcache` + `lua-resty-redis`) built against the 1.29.x runtime.
 * When Redis is (re)introduced: requests fall back directly to S3 when Redis is down or slow.
