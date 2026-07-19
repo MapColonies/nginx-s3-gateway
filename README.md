@@ -17,43 +17,37 @@ Configuring `nginxinc/nginx-s3-gateway` image to act as an authenticating and ca
 * Protecting a S3 bucket with a WAF
 * Serving static assets from a S3 bucket alongside a dynamic application endpoints all in a single RESTful directory structure
 
-# NGINX-S3-Gateway with Lua and Redis Feature
+# Build
 
-This Dockerfile enhances the NGINX-S3-Gateway image by adding Redis support using OpenResty. The resulting image provides a powerful and extensible NGINX setup for S3 gateway functionality with the added benefits of Lua scripting and Redis integration.
+The image is assembled in a multi-stage `docker-image/Dockerfile`:
 
-## Build Process Overview
+1. **Gateway source stage** — pulls the official `nginxinc/nginx-s3-gateway`
+   image (`unprivileged-oss-20250825`) purely as a source of the S3 gateway
+   configuration: the njs scripts (`include/`), config templates (`templates/`)
+   and the entrypoint hooks (`docker-entrypoint.d/`).
 
-1. **Base Image Setup:**
-   - The Dockerfile starts from the Debian base image, which is the foundation for the NGINX-S3-Gateway.
+2. **Final image** — built on `nginxinc/nginx-unprivileged:1.28.0-alpine3.21-otel`,
+   which provides the nginx 1.28.0 binary together with matching OpenTelemetry,
+   njs and xslt modules. The gateway configuration from stage 1 is copied in
+   **without** its compiled modules or `nginx.conf`, so the OTel base's own
+   ABI-matched 1.28.0 modules are used. (The gateway image ships nginx 1.29.0,
+   whose `.so` modules are not binary-compatible with the 1.28.0 runtime.)
 
-2. **Installation of Build Dependencies:**
-   - Essential packages, including `wget`, `build-essential`, and required libraries, are installed to facilitate the subsequent build process.
+3. **MapColonies customizations** — `auth.js` (OPA/JWT authorization),
+   `status_site.conf` (stub-status endpoint) and two entrypoint hooks
+   (`05-copy-custom-templates.sh`, `06-set-computed-vars.envsh`) are layered on
+   top. Runtime directories are made group-writable so the image runs under
+   OpenShift's arbitrary UID.
 
-3. **NGINX Compilation with OpenResty Modules:**
-   - The OpenResty NGINX modules (e.g., lua-nginx-module and srcache-nginx-module) are cloned into the workspace.
-   - LuaJIT is cloned and installed, and environment variables (`LUAJIT_LIB` and `LUAJIT_INC`) are set to ensure correct library paths.
-   - NGINX is configured using the `./configure` script with various modules and options, including dynamic modules for OpenResty.
-   - NGINX is then compiled (`make`) and installed (`make install`).
-
-   To determine the appropriate configuration for building NGINX with additional Lua and dynamic modules, we retrieved the configuration command using "nginx -V" within the desired version of NGINX. This ensures compatibility with the chosen NGINX version.
-   Executing "nginx -V" inside the container of the selected NGINX version helps guarantee that the configuration for building NGINX is as close as possible to the official NGINX version. This minimizes the risk of encountering binary compatibility issues during the build process.
-
-4. **Add-ons Installation:**
-   - Additional Lua modules that do not require compilation (e.g., lua-resty-redis) are cloned and installed.
-
-5. **Integration with NGINX-S3-Gateway Image:**
-   - The NGINX-S3-Gateway image is used as the base for further modifications.
-   - The compiled NGINX modules, libraries, and additional Lua modules are copied from the build stage to the NGINX-S3-Gateway image.
-
-6. **Configuration and Entrypoint:**
-   - Custom configuration files (`nginx.conf.template` and `default.conf.template`) are copied to their respective locations.
-   - The entrypoint script is set as executable.
+> **Note:** Lua/Redis response caching (OpenResty `srcache` + `lua-resty-redis`)
+> is not compiled into this image yet — re-adding it is tracked as a follow-up.
 
 ## Building the Docker Image
 
-To build the Docker image with the Redis feature:
+To build the Docker image:
 
 ```bash
+cd docker-image
 docker image build -t <prefix>/nginx-s3-gateway:v1.0.0 .
 ```
 
@@ -88,7 +82,7 @@ docker container run -d --rm --name nginx-s3-gateway \
   <prefix>/nginx-s3-gateway
 ```
 
-This command will expose NGINX, providing access to the S3 gateway with Redis integration.
+This command will expose NGINX, providing access to the S3 gateway.
 
 ## Customization
 
@@ -96,7 +90,7 @@ Feel free to customize the NGINX configuration files (`nginx.conf` and `default.
 
 ## Testing
 
-The Dockerfile has been tested locally to ensure proper integration of the Redis feature. Comprehensive testing includes both unit tests and manual testing to validate functionality.
+The image is built and smoke-tested locally (module load / njs) before release; the Helm chart is validated with `helm template`.
 
 ## Install
 
@@ -105,13 +99,7 @@ The Dockerfile has been tested locally to ensure proper integration of the Redis
   helm install proxy .
 ```
 
-See: [OpenResty](https://openresty.org/)
-
 ## Future Considerations
 
-This Dockerfile provides a solid foundation for NGINX with Redis support. Future enhancements may include additional Redis-related configurations and features based on project requirements (e.g., prometheus).
-
-## Use Cases
-
-* When Redis is down, requests will be sent directly to S3
-* When a request is taking longer than expected in redis, the request will be sent to S3
+* Re-add Lua/Redis response caching (OpenResty `srcache` + `lua-resty-redis`) built against the 1.28.0 runtime.
+* When Redis is (re)introduced: requests fall back directly to S3 when Redis is down or slow.
