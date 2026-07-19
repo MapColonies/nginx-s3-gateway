@@ -25,10 +25,7 @@ COPY --from=gateway-source /etc/nginx/conf.d /etc/nginx/conf.d
 COPY --from=gateway-source /docker-entrypoint.d /docker-entrypoint.d
 COPY --from=gateway-source /docker-entrypoint.sh /docker-entrypoint.sh
 
-# ENV defaults the gateway image carries but the OTel base does not. The gateway
-# entrypoint/templates read these; helm or runtime env overrides any of them.
-# (CORS_ENABLED / CORS_ALLOW_PRIVATE_NETWORK_ACCESS are omitted: the gateway
-# entrypoint always exports them, so a default here would be dead weight.)
+# ENV defaults the gateway image carries but the OTel base does not
 ENV DIRECTORY_LISTING_PATH_PREFIX= \
     STRIP_LEADING_DIRECTORY_PATH= \
     PREFIX_LEADING_DIRECTORY_PATH= \
