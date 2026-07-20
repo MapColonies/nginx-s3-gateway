@@ -1,97 +1,32 @@
-FROM debian:12 as BUILDER
-
-RUN apt update && apt install -y wget build-essential git zlib1g-dev curl libpcre2-dev libssl-dev
-
-WORKDIR /work
-
-ARG BASE_NGINX_VERSION=1.25.3
-
-## BASE NGINX
-RUN wget https://openresty.org/download/nginx-${BASE_NGINX_VERSION}.tar.gz \
-    && tar -xzvf nginx-${BASE_NGINX_VERSION}.tar.gz
-
-## LUA JIT
-RUN wget https://github.com/openresty/luajit2/archive/refs/tags/v2.1-20231117.tar.gz \
-    && tar -xzvf v2.1-20231117.tar.gz \ 
-    && cd luajit2-2.1-20231117 \
-    && make \
-    && make install
-
-ENV LUAJIT_LIB=/usr/local/lib/
-ENV LUAJIT_INC=/usr/local/include/luajit-2.1
-
-## CLONE OPENRESTY REPOS
-RUN wget https://github.com/vision5/ngx_devel_kit/archive/refs/tags/v0.3.3.tar.gz \
-    && tar -xzvf v0.3.3.tar.gz \
-    && wget https://github.com/openresty/lua-nginx-module/archive/refs/tags/v0.10.26rc1.tar.gz \
-    && tar -xzvf v0.10.26rc1.tar.gz \
-    && wget https://github.com/openresty/srcache-nginx-module/archive/refs/tags/v0.33.tar.gz \
-    && tar -xzvf v0.33.tar.gz \
-    && rm -rf v0.33.tar.gz \
-    && wget https://github.com/openresty/set-misc-nginx-module/archive/refs/tags/v0.33.tar.gz \
-    && tar -xzvf v0.33.tar.gz \
-    && wget https://github.com/openresty/headers-more-nginx-module/archive/refs/tags/v0.36.tar.gz \
-    && tar -xzvf v0.36.tar.gz
-
-## COMPILE NGINX FOR THE DYNAMIC MODULES
-RUN cd nginx-${BASE_NGINX_VERSION} \
-    && ./configure --prefix=/etc/nginx \
-    --sbin-path=/usr/sbin/nginx --modules-path=/usr/lib/nginx/modules --conf-path=/etc/nginx/nginx.conf --error-log-path=/var/log/nginx/error.log \
-    --http-log-path=/var/log/nginx/access.log --pid-path=/var/run/nginx.pid --lock-path=/var/run/nginx.lock \
-    --http-client-body-temp-path=/var/cache/nginx/client_temp --http-proxy-temp-path=/var/cache/nginx/proxy_temp \
-    --http-fastcgi-temp-path=/var/cache/nginx/fastcgi_temp --http-uwsgi-temp-path=/var/cache/nginx/uwsgi_temp \
-    --http-scgi-temp-path=/var/cache/nginx/scgi_temp --user=nginx --group=nginx --with-compat --with-file-aio --with-threads \
-    --with-http_addition_module --with-http_auth_request_module --with-http_dav_module --with-http_flv_module --with-http_gunzip_module \
-    --with-http_gzip_static_module --with-http_mp4_module --with-http_random_index_module --with-http_realip_module --with-http_secure_link_module \
-    --with-http_slice_module --with-http_ssl_module --with-http_stub_status_module --with-http_sub_module --with-http_v2_module --with-http_v3_module \
-    --with-mail --with-mail_ssl_module --with-stream --with-stream_realip_module --with-stream_ssl_module --with-stream_ssl_preread_module \
-    --with-cc-opt='-g -O2 -ffile-prefix-map=/data/builder/debuild/nginx-${BASE_NGINX_VERSION}/debian/debuild-base/nginx-${BASE_NGINX_VERSION}=. -fstack-protector-strong -Wformat -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fPIC' \
-    --with-ld-opt='-Wl,-z,relro -Wl,-z,now -Wl,-rpath,/usr/local/lib,--as-needed -pie' \
-    --add-dynamic-module=/work/ngx_devel_kit-0.3.3 \
-    --add-dynamic-module=/work/lua-nginx-module-0.10.26rc1 \
-    --add-dynamic-module=/work/srcache-nginx-module-0.33 \
-    --add-dynamic-module=/work/set-misc-nginx-module-0.33 \
-    --add-dynamic-module=/work/headers-more-nginx-module-0.36 \
-    && make -j2 \
-    && make install
-
-## ADD-ONS THAT DO NOT NEED COMPILATION
-RUN git clone https://github.com/openresty/lua-resty-core.git \
-    && cd lua-resty-core \
-    && make install PREFIX=/etc/nginx \
-    && cd /work \
-    && git clone https://github.com/openresty/lua-resty-lrucache.git \
-    && cd lua-resty-lrucache \
-    && make install PREFIX=/etc/nginx \
-    && cd /work \
-    && git clone https://github.com/openresty/lua-resty-redis.git \
-    && cd lua-resty-redis \
-    && make install PREFIX=/etc/nginx
-
-
-## NGINX-S3-GATEWAY
-FROM ghcr.io/nginxinc/nginx-s3-gateway/nginx-oss-s3-gateway:unprivileged-oss-20231102
+# MapColonies S3 gateway image.
+#
+# Built directly on the official nginx-s3-gateway image (this is the version
+# upgrade). The stock image already ships the gateway njs, the config templates
+# and the docker-entrypoint that derives S3_UPSTREAM, DNS_RESOLVERS,
+# CORS_ALLOWED_ORIGIN, LIMIT_METHODS_TO and S3_HOST_HEADER, so only the
+# MapColonies bits are added on top: a few ENV defaults and the OpenShift
+# arbitrary-UID permissions. (The Debian-based stock image already ships bash.)
+FROM nginxinc/nginx-s3-gateway:unprivileged-oss-20250825
 
 USER root
 
-ARG BASE_NGINX_VERSION=1.25.3
+# ENV defaults the stock image does not carry. The three leading-dir / listing
+# vars must exist (even empty) or envsubst leaves the literal ${VAR} in the
+# rendered config and nginx fails to start with "unknown variable".
+ENV DIRECTORY_LISTING_PATH_PREFIX= \
+    STRIP_LEADING_DIRECTORY_PATH= \
+    PREFIX_LEADING_DIRECTORY_PATH= \
+    PROXY_CACHE_MAX_SIZE=10g \
+    PROXY_CACHE_INACTIVE=60m \
+    PROXY_CACHE_SLICE_SIZE=1m \
+    PROXY_CACHE_VALID_OK=1h \
+    PROXY_CACHE_VALID_NOTFOUND=1m \
+    PROXY_CACHE_VALID_FORBIDDEN=30s
 
-## EXPORT PATHS OF LUA
-ENV LUAJIT_LIB=/usr/local/lib/
-ENV LUAJIT_INC=/usr/local/include/luajit-2.1
+# OpenShift runs the container as an arbitrary UID in the root (0) supplemental
+# group. Make the dirs the entrypoint and nginx write to group-writable so the
+# image works regardless of the assigned UID.
+RUN chmod -R g+rwX /etc/nginx /var/cache/nginx /docker-entrypoint.d
 
-## COPY THE MODULES FROM BUILDER STAGE TO NGINX-S3-GATEWAY
-COPY --from=BUILDER /work/nginx-${BASE_NGINX_VERSION}/objs/*.so /etc/nginx/modules/
-COPY --from=BUILDER /etc/nginx/lib /etc/nginx/lib
-COPY --from=BUILDER /usr/local/lib/ /usr/local/lib
-
-COPY jwt.js /etc/nginx/jwt.js
-COPY 21-envsubst-on-nginx-conf.sh /docker-entrypoint.d
-COPY default.conf.template /etc/nginx/templates
-COPY nginx.conf.template /etc/nginx/nginx.conf.template
-
-RUN chmod +x /docker-entrypoint.d/21-envsubst-on-nginx-conf.sh
-
-EXPOSE 8080
-
-USER nginx
+# Run unprivileged (uid 101 = nginx in the base image).
+USER 101
