@@ -2,17 +2,6 @@ import qs from "querystring";
 import base from "/etc/nginx/auth.js";
 
 // Gateway-specific auth layered on the shared OPA/JWT core.
-//
-// The base module (opaAuth, jwtPayloadSub) is inherited unchanged from the
-// MapColonies nginx image at /etc/nginx/auth.js. This module adds combinedAuth,
-// which is coupled to the S3 gateway: it calls /aws/credentials/retrieve, a
-// location that only exists in the nginx-s3-gateway config. It therefore cannot
-// live in the general nginx image and is kept here instead.
-//
-// The default export re-exports the base members so a single
-// `js_import auth from /etc/nginx/s3_auth.js` still resolves auth.jwtPayloadSub
-// (js_set) and auth.opaAuth alongside auth.combinedAuth.
-
 function buildOpaBody(r) {
   return JSON.stringify({
     input: {
@@ -37,8 +26,6 @@ function buildOpaBody(r) {
 }
 
 // Combined auth handler: OPA check then S3 credential retrieval.
-// Used as js_content in /_combined_auth (single auth_request replaces two).
-// Passes OPA result/reason back via response headers for auth_request_set.
 async function combinedAuth(r) {
   try {
     if (r.variables.original_method !== "OPTIONS") {
