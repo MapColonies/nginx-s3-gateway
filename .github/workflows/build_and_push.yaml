@@ -30,7 +30,7 @@ jobs:
     env:
       # Version tag of the MapColonies/nginx base image that carries nginx 1.29.8.
       # A version string only (not sensitive). Bump when the base is re-released.
-      NGINX_BASE_TAG: v2.3.0
+      NGINX_BASE_TAG: v2.2.2
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
