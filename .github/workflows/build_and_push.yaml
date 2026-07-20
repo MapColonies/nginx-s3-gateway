@@ -18,11 +18,48 @@ permissions:
   pull-requests: write
 
 jobs:
+  # This image builds FROM the private MapColonies nginx base, so the build
+  # needs the base reference passed in. The shared build-and-push-docker
+  # reusable workflow runs a bare `docker build` with no build-args, so it is
+  # replaced here with an inline build that supplies NGINX_BASE_IMAGE. The
+  # private registry host comes from the ACR_URL secret and is never committed;
+  # only the (non-sensitive) base version tag lives in this file.
   build_and_push_docker:
-      uses: MapColonies/shared-workflows/.github/workflows/build-and-push-docker.yaml@v4
-      secrets: inherit
-      with:
-        scope: common
+    name: Build and publish docker image to registry
+    runs-on: ubuntu-latest
+    env:
+      # Version tag of the MapColonies/nginx base image that carries nginx 1.29.8.
+      # A version string only (not sensitive). Bump when the base is re-released.
+      NGINX_BASE_TAG: v2.3.0
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.ACR_URL }}
+          username: ${{ secrets.ACR_PUSH_USER }}
+          password: ${{ secrets.ACR_PUSH_TOKEN }}
+
+      - name: Build and push docker image
+        run: |
+          IMAGE="${{ secrets.ACR_URL }}/common/${{ github.event.repository.name }}:${{ github.ref_name }}"
+          IMAGE="${IMAGE,,}"
+          docker build \
+            --build-arg NGINX_BASE_IMAGE="${{ secrets.ACR_URL }}/common/nginx:${NGINX_BASE_TAG}" \
+            -t "${IMAGE}" .
+          docker push "${IMAGE}"
+
+  # Preserve the artifact tracking the shared docker workflow would have done.
+  update_docker_artifact:
+    uses: MapColonies/shared-workflows/.github/workflows/update-artifacts-file.yaml@v4
+    secrets: inherit
+    needs: build_and_push_docker
+    with:
+      scope: common
+      artifact-name: ${{ github.event.repository.name }}
+      artifact-tag: ${{ github.ref_name }}
 
   build_and_push_helm:
       uses: MapColonies/shared-workflows/.github/workflows/build-and-push-helm.yaml@v4

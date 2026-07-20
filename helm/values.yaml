@@ -12,6 +12,18 @@ authorization:
   domain: dem
   url:
 
+opentelemetry:
+  # -- OpenTelemetry service name associated with this NGINX application
+  serviceName: nginx
+  # -- OpenTelemetry Collector endpoint address (empty disables the exporter)
+  exporterHost: "localhost"
+  # -- gRPC port for the OpenTelemetry Collector
+  exporterPort: 4317
+  # -- OpenTelemetry sampling method: AlwaysOn, AlwaysOff, TraceIdRatioBased
+  samplerMethod: "AlwaysOff"
+  # -- OpenTelemetry sampling ratio (percent, used when samplerMethod is TraceIdRatioBased)
+  ratio: 10
+
 image:
   repository: nginx-s3-gateway
   tag: v3.0.2

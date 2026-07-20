@@ -59,9 +59,6 @@ spec:
           #   - infinity
           volumeMounts:
             - name: nginx-custom-conf
-              mountPath: /etc/nginx/auth.js
-              subPath: auth.js
-            - name: nginx-custom-conf
               mountPath: /etc/nginx/log_format.conf
               subPath: log_format.conf
             - name: nginx-custom-conf

@@ -127,3 +127,27 @@ Returns secret name
 {{- define "nginx-s3-gateway.secretName" -}}
 {{- printf "s3-%s" (include "nginx-s3-gateway.fullname" .) -}}
 {{- end -}}
+
+{{/*
+Generate OpenTelemetry ratio sampler split_clients block
+*/}}
+{{- define "nginx-s3-gateway.otelRatioSampler" -}}
+split_clients "$otel_trace_id" $ratio_sampler {
+              {{ .Values.opentelemetry.ratio }}%              on;
+              *                off;
+}
+{{- end -}}
+
+{{/*
+Generate OpenTelemetry trace configuration
+*/}}
+{{- define "nginx-s3-gateway.otelTrace" -}}
+{{- if eq .Values.opentelemetry.samplerMethod "AlwaysOn" -}}
+otel_trace on;
+{{- else if eq .Values.opentelemetry.samplerMethod "TraceIdRatioBased" -}}
+otel_trace $ratio_sampler;
+{{- else -}}
+otel_trace off;
+{{- end -}}
+otel_trace_context propagate;
+{{- end -}}
