@@ -1,9 +1,5 @@
 import base from "/etc/nginx/auth.js";
 
-// Gateway-specific auth layered on the shared OPA/JWT core. The OPA request
-// body is built by the base image's buildOpaBody so this gateway sends OPA the
-// exact same input contract (denylist header filtering, size limits, etc.).
-
 // Combined auth handler: OPA check then S3 credential retrieval.
 async function combinedAuth(r) {
   try {
