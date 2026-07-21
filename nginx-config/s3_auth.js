@@ -1,36 +1,15 @@
-import qs from "querystring";
 import base from "/etc/nginx/auth.js";
 
-// Gateway-specific auth layered on the shared OPA/JWT core.
-function buildOpaBody(r) {
-  return JSON.stringify({
-    input: {
-      method: r.variables.original_method,
-      headers: {
-        'user-agent': r.headersIn['user-agent'],
-        'origin': r.headersIn['origin'],
-        'referer': r.headersIn['referer'],
-        'x-api-key': r.headersIn['x-api-key'],
-        'host': r.headersIn['host'],
-        'x-forwarded-for': r.headersIn['x-forwarded-for'],
-        'x-forwarded-host': r.headersIn['x-forwarded-host'],
-        'x-forwarded-proto': r.headersIn['x-forwarded-proto'],
-        'x-real-ip': r.headersIn['x-real-ip'],
-        'content-type': r.headersIn['content-type'],
-        'content-length': r.headersIn['content-length'],
-      },
-      query: qs.parse(r.variables.original_args),
-      domain: r.variables.domain,
-    },
-  });
-}
+// Gateway-specific auth layered on the shared OPA/JWT core. The OPA request
+// body is built by the base image's buildOpaBody so this gateway sends OPA the
+// exact same input contract (denylist header filtering, size limits, etc.).
 
 // Combined auth handler: OPA check then S3 credential retrieval.
 async function combinedAuth(r) {
   try {
     if (r.variables.original_method !== "OPTIONS") {
       const opaResp = await r.subrequest("/opa", {
-        body: buildOpaBody(r),
+        body: base.buildOpaBody(r),
         method: "POST",
       });
 
