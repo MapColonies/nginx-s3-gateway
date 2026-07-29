@@ -26,10 +26,9 @@ opentelemetry:
 
 image:
   repository: nginx-s3-gateway
-  tag: v3.0.2
 
 enabled: true
-environment: production
+environment: dev
 initialDelaySeconds: 10
 nodePort: 30030
 replicaCount: 1
@@ -75,8 +74,8 @@ route:
 
 s3:
   bucketName: dem-int
-  accessKeyId: raster
-  secretAccessKey: rasterPassword
+  accessKeyId: common
+  secretAccessKey: commonPassword
   server: 10.8.0.9
   serverPort: 9000
   serverProto: http
@@ -97,38 +96,3 @@ s3:
 
 aws:
   sigsVersion: 4
-
-opa:
-  image: openpolicyagent/opa
-  imageTag: 0.29.4-envoy-3
-  port: 9191
-  resources:
-    enabled: true
-    value:
-      limits:
-        cpu: 400m
-        memory: 200Mi
-      requests:
-        cpu: 100m
-        memory: 200Mi
-
-envoy:
-  image: envoyproxy/envoy
-  imageTag: v1.20.7
-  port: 6565
-  maxRequestBytes: 8192
-  requestedDomain: dem
-  resources:
-    enabled: true
-    value:
-      limits:
-        cpu: 500m
-        memory: 900Mi
-      requests:
-        cpu: 125m
-        memory: 900Mi
-
-logsFilebeat:
-  enabled: false
-  filebeatImage: docker.elastic.co/beats/filebeat:7.12.1
-  mountPath: /var/log/nginx
