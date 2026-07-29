@@ -9,7 +9,7 @@ splunkIndex: ''
 
 authorization:
   enabled: false
-  domain: dem
+  domain: common
   url:
 
 opentelemetry:
@@ -73,7 +73,7 @@ route:
     useCert: true
 
 s3:
-  bucketName: dem-int
+  bucketName: bucket
   accessKeyId: common
   secretAccessKey: commonPassword
   server: 10.8.0.9
