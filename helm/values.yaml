@@ -76,7 +76,7 @@ s3:
   bucketName: bucket
   accessKeyId: common
   secretAccessKey: commonPassword
-  server: 10.8.0.9
+  server: localhost
   serverPort: 9000
   serverProto: http
   region: us-east-1
