@@ -2,10 +2,16 @@ global:
   cloudProvider: {}
   tracing: {}
   metrics: {}
-  environment: ''
   allowDirectoryList: false
 
 splunkIndex: ''
+
+mclabels:
+  component: proxy-server
+  criticality: customer
+  partOf: serving
+  owner: common
+  environment: development
 
 authorization:
   enabled: false
@@ -28,7 +34,6 @@ image:
   repository: common/nginx-s3-gateway
 
 enabled: true
-environment: dev
 initialDelaySeconds: 10
 nodePort: 30030
 replicaCount: 1
