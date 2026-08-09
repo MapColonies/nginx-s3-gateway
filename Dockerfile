@@ -31,8 +31,8 @@ ENV DIRECTORY_LISTING_PATH_PREFIX= \
     PROXY_CACHE_VALID_NOTFOUND=1m \
     PROXY_CACHE_VALID_FORBIDDEN=30s
 
-# Gateway-specific auth extension
-COPY nginx-config/s3_auth.js /etc/nginx/
+# Gateway-specific OPA/JWT auth extension
+COPY nginx-config/opa_auth.js /etc/nginx/
 
 RUN chmod +x /docker-entrypoint.sh && \
     chmod -R g+rwX /etc/nginx /var/cache/nginx /docker-entrypoint.d /docker-entrypoint.sh

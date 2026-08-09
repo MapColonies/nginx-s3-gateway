@@ -8,9 +8,12 @@ global:
 splunkIndex: ''
 
 authorization:
-  enabled: false
-  domain: common
-  url:
+  opa:
+    enabled: false
+    domain: common
+    url:
+  s3:
+    enabled: true
 
 opentelemetry:
   # -- OpenTelemetry service name associated with this NGINX application

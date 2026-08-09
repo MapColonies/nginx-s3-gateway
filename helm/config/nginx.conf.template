@@ -71,8 +71,8 @@ http {
         default     "1.1";
     }
 
-    {{ if .Values.authorization.enabled }}
-    js_import auth from /etc/nginx/s3_auth.js;
+    {{ if .Values.authorization.opa.enabled }}
+    js_import auth from /etc/nginx/opa_auth.js;
     js_set $jwt_payload_sub auth.jwtPayloadSub;
     {{ end }}
 

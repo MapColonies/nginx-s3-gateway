@@ -95,15 +95,18 @@ server {
         set $original_method $request_method;
         set $original_args $args;
 
-        {{ if .Values.authorization.enabled }}
-        set $domain {{ .Values.authorization.domain }};
+        {{ if .Values.authorization.opa.enabled }}
+        set $domain {{ .Values.authorization.opa.domain }};
+        {{ if .Values.authorization.s3.enabled }}
         auth_request /_combined_auth;
         auth_request_set $opa_result $upstream_http_x_opa_result;
         auth_request_set $opa_reason $upstream_http_x_opa_reason;
-
+        {{ else }}
+        auth_request /_opa_auth;
+        {{ end }}
         otel_span_attr opa.result $opa_result;
         otel_span_attr opa.reason $opa_reason;
-        {{ else }}
+        {{ else if .Values.authorization.s3.enabled }}
         auth_request /aws/credentials/retrieve;
         {{ end }}
 
@@ -113,16 +116,23 @@ server {
         js_content s3gateway.redirectToS3;
     }
 
-    {{ if .Values.authorization.enabled }}
+    {{ if .Values.authorization.opa.enabled }}
+    {{ if .Values.authorization.s3.enabled }}
     location = /_combined_auth {
         internal;
         js_content auth.combinedAuth;
     }
+    {{ else }}
+    location = /_opa_auth {
+        internal;
+        js_content auth.opaAuth;
+    }
+    {{ end }}
 
     location = /opa {
         internal;
         proxy_set_header Content-Type application/json;
-        proxy_pass {{ .Values.authorization.url }};
+        proxy_pass {{ .Values.authorization.opa.url }};
     }
     {{ end }}
 

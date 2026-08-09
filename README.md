@@ -19,7 +19,7 @@ The image is a 2-stage build:
 1. **Stage 1** pulls the official `nginxinc/nginx-s3-gateway` image for the
    version-independent gateway pieces (njs, config templates, docker-entrypoint).
 2. **Final stage** builds `FROM ${NGINX_BASE_IMAGE}` (the MapColonies nginx base) and
-   copies those pieces in, adding the gateway auth extension (`nginx-config/s3_auth.js`)
+   copies those pieces in, adding the gateway OPA/JWT auth extension (`nginx-config/opa_auth.js`)
    and the OpenShift arbitrary-UID permissions.
 
 `NGINX_BASE_IMAGE` has **no default** — a bare `docker build` fails fast so the registry
@@ -38,8 +38,10 @@ CI (`.github/workflows/build_and_push.yaml`) supplies the base image and tag fro
 
 * **OpenTelemetry** — `ngx_otel_module` tracing, configured via the `opentelemetry` values
   block (`serviceName`, `exporterHost`/`exporterPort`, `samplerMethod`, `ratio`).
-* **OPA auth** — combined auth flow (`/_combined_auth` + `/opa` locations, `auth_request`),
-  re-using the base image's `opaAuth`/`jwtPayloadSub` njs. Gated by `authorization.enabled`.
+* **OPA auth** (`authorization.opa.enabled`) and **S3 credential retrieval**
+  (`authorization.s3.enabled`) are independent. Both on → combined flow (`/_combined_auth`);
+  OPA only → `/_opa_auth` (base image's `opaAuth`); S3 only → `/aws/credentials/retrieve`.
+  OPA re-uses the base image's `opaAuth`/`jwtPayloadSub` njs.
 * **Caching** — proxy cache tunables via the `PROXY_CACHE_*` env / `s3.cache*` values.
 
 ## Deploy (Helm)
