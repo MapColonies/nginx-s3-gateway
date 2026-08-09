@@ -25,7 +25,7 @@ opentelemetry:
   ratio: 10
 
 image:
-  repository: nginx-s3-gateway
+  repository: common/nginx-s3-gateway
 
 enabled: true
 environment: dev
