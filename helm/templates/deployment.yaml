@@ -66,9 +66,9 @@ spec:
               subPath: log_format.conf
             - name: nginx-custom-conf
               mountPath: /etc/nginx/templates/default.conf.template
-              subPath: default.conf.template 
+              subPath: default.conf.template
             - name: nginx-custom-conf
-              mountPath: /etc/nginx/nginx.conf.template
+              mountPath: /etc/nginx/nginx.conf
               subPath: nginx.conf.template
             {{- if .Values.s3.customServerConf }}
             - name: nginx-custom-conf
@@ -99,7 +99,7 @@ spec:
             periodSeconds: 5
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready
               port: {{ .Values.env.targetPort }}
             initialDelaySeconds: {{ .Values.initialDelaySeconds }}
           {{- if .Values.resources.enabled }}
