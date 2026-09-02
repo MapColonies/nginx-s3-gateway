@@ -8,16 +8,30 @@ global:
 splunkIndex: ''
 
 authorization:
-  enabled: false
-  domain: dem
-  url:
+  opa:
+    enabled: false
+    domain: common
+    url:
+  s3:
+    enabled: true
+
+opentelemetry:
+  # -- OpenTelemetry service name associated with this NGINX application
+  serviceName: nginx
+  # -- OpenTelemetry Collector endpoint address (empty disables the exporter)
+  exporterHost: "localhost"
+  # -- gRPC port for the OpenTelemetry Collector
+  exporterPort: 4317
+  # -- OpenTelemetry sampling method: AlwaysOn, AlwaysOff, TraceIdRatioBased
+  samplerMethod: "AlwaysOff"
+  # -- OpenTelemetry sampling ratio (percent, used when samplerMethod is TraceIdRatioBased)
+  ratio: 10
 
 image:
-  repository: nginx-s3-gateway
-  tag: v3.0.2
+  repository: common/nginx-s3-gateway
 
 enabled: true
-environment: production
+environment: dev
 initialDelaySeconds: 10
 nodePort: 30030
 replicaCount: 1
@@ -62,10 +76,10 @@ route:
     useCert: true
 
 s3:
-  bucketName: dem-int
-  accessKeyId: raster
-  secretAccessKey: rasterPassword
-  server: 10.8.0.9
+  bucketName: bucket
+  accessKeyId: common
+  secretAccessKey: commonPassword
+  server: localhost
   serverPort: 9000
   serverProto: http
   region: us-east-1
@@ -87,38 +101,3 @@ s3:
 
 aws:
   sigsVersion: 4
-
-opa:
-  image: openpolicyagent/opa
-  imageTag: 0.29.4-envoy-3
-  port: 9191
-  resources:
-    enabled: true
-    value:
-      limits:
-        cpu: 400m
-        memory: 200Mi
-      requests:
-        cpu: 100m
-        memory: 200Mi
-
-envoy:
-  image: envoyproxy/envoy
-  imageTag: v1.20.7
-  port: 6565
-  maxRequestBytes: 8192
-  requestedDomain: dem
-  resources:
-    enabled: true
-    value:
-      limits:
-        cpu: 500m
-        memory: 900Mi
-      requests:
-        cpu: 125m
-        memory: 900Mi
-
-logsFilebeat:
-  enabled: false
-  filebeatImage: docker.elastic.co/beats/filebeat:7.12.1
-  mountPath: /var/log/nginx

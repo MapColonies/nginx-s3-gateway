@@ -64,6 +64,12 @@ server {
     proxy_cache_use_stale error timeout http_500 http_502 http_503 http_504;
     proxy_cache_key "$request_method$host$uri";
 
+    # The readiness probe must reflect live S3 reachability, so it bypasses the
+    # cache (both read and store). $readiness is set only in the readiness
+    # location; empty for all other traffic, which caches normally.
+    proxy_cache_bypass $readiness;
+    proxy_no_cache $readiness;
+
     # If you need to support proxying range request, refer to this article:
     # https://www.nginx.com/blog/smart-efficient-byte-range-caching-nginx/
 
@@ -94,6 +100,21 @@ server {
         proxy_pass http://127.0.0.1:8080/{{ .Values.s3.readinessObject | default "liveness.txt" }};
     }
 
+    # Exact-match handler for the readiness object. The signature is derived from
+    # $request_uri (via $uri_path), so /ready must re-enter on the real object
+    # path — which lands here, not in `location /`. This deliberately carries S3
+    # signing but NOT the OPA auth_request: the probe has no user token, and an
+    # OPA-gated readiness would fail closed on every request. Trade-off: this one
+    # object is reachable without OPA (it's the health marker).
+    location = /{{ .Values.s3.readinessObject | default "liveness.txt" }} {
+        access_log off;
+        set $readiness 1;
+        {{ if .Values.authorization.s3.enabled }}
+        auth_request /aws/credentials/retrieve;
+        {{ end }}
+        js_content s3gateway.redirectToS3;
+    }
+
     location / {
         # This value is templated in based on the value of $CORS_ENABLED. When
         # CORS is enabled, acceptable methods are GET, HEAD, and OPTIONS.
@@ -106,13 +127,51 @@ server {
         # extended to meet your needs.
         include /etc/nginx/conf.d/gateway/cors.conf;
 
+        {{ include "nginx-s3-gateway.otelTrace" . | nindent 8 }}
+
+        set $original_method $request_method;
+        set $original_args $args;
+
+        {{ if .Values.authorization.opa.enabled }}
+        set $domain {{ .Values.authorization.opa.domain }};
+        {{ if .Values.authorization.s3.enabled }}
+        auth_request /_combined_auth;
+        auth_request_set $opa_result $upstream_http_x_opa_result;
+        auth_request_set $opa_reason $upstream_http_x_opa_reason;
+        {{ else }}
+        auth_request /_opa_auth;
+        {{ end }}
+        otel_span_attr opa.result $opa_result;
+        otel_span_attr opa.reason $opa_reason;
+        {{ else if .Values.authorization.s3.enabled }}
         auth_request /aws/credentials/retrieve;
+        {{ end }}
 
         # Redirect to the proper location based on the client request - either
         # @s3, @s3PreListing or @error405.
 
         js_content s3gateway.redirectToS3;
     }
+
+    {{ if .Values.authorization.opa.enabled }}
+    {{ if .Values.authorization.s3.enabled }}
+    location = /_combined_auth {
+        internal;
+        js_content auth.combinedAuth;
+    }
+    {{ else }}
+    location = /_opa_auth {
+        internal;
+        js_content auth.opaAuth;
+    }
+    {{ end }}
+
+    location = /opa {
+        internal;
+        proxy_set_header Content-Type application/json;
+        proxy_pass {{ .Values.authorization.opa.url }};
+    }
+    {{ end }}
 
     location /aws/credentials/retrieve {
         internal;

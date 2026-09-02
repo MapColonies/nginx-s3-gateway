@@ -1,23 +1,35 @@
-# Example Deployment with Docker Compose**
+# Example deployment with Docker Compose
 
-In the `example` folder, you'll find a Docker Compose file (`docker-compose.yml`) along with NGINX configuration files (`nginx.conf` and `default.conf`) and redis configuration files (key handling files). This example demonstrates a simplified deployment of NGINX-S3-Gateway with Redis integration.
+The `example` folder holds a Docker Compose stack that runs the S3 gateway image in front
+of a local [MinIO](https://min.io/) S3 server — a quick way to try the gateway locally.
 
 ### Prerequisites
 
-Make sure you have Docker and Docker Compose installed on your system.
+* Docker and Docker Compose installed.
+* Access to the MapColonies nginx base image. Set `NGINX_BASE_IMAGE` in `.env` to the real
+  `<registry>/common/nginx:<tag>` — the Dockerfile has no default and the build fails
+  without it.
 
+### Deployment steps
 
-### Deployment Steps
+From the `example` folder:
 
-Just navigate to the `example` folder and run:
 ```bash
-docker-compose up -d
+docker-compose up -d --build
 ```
 
-The docker-compose file contains 4 containers:
-1. nginx-s3-gateway - with all the required env for redis and S3.
-2. redis - for cache
-3. minio
-4. createBucketAndObjectsOnS3 - for creating bucket and objects in S3 (Optional).
+The stack contains 3 containers:
 
-Make sure that every change are set in all containers (.e.g username for S3) and you got yourself nginx-redis3 to play with ;)
+1. **nginx-s3-gateway** — built from `../Dockerfile`, configured via env in `.env`.
+2. **minio** — local S3 server.
+3. **createBucketAndObjectsOnS3** — one-shot job that creates the bucket and seeds the
+   objects from `minioData/` (optional).
+
+The gateway is exposed on `http://localhost:8080`; the MinIO console on
+`http://localhost:9001`. Fetch a seeded object, e.g.:
+
+```bash
+curl http://localhost:8080/example.txt
+```
+
+Adjust bucket name, credentials and cache settings in `.env`.

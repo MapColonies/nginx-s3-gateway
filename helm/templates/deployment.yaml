@@ -41,13 +41,6 @@ spec:
         - name: nginx-custom-conf
           configMap:
             name: {{ $releaseName }}-{{ $chartName }}-custom-configmap
-        {{- if .Values.logsFilebeat.enabled }}
-        - name: logs
-          emptyDir: {}
-        - name: config
-          configMap:
-            name: filebeat-config
-        {{- end }}
       containers:
         - name: {{ $chartName }}
           {{- with .Values.image }}
@@ -58,9 +51,6 @@ spec:
           #   - sleep
           #   - infinity
           volumeMounts:
-            - name: nginx-custom-conf
-              mountPath: /etc/nginx/auth.js
-              subPath: auth.js
             - name: nginx-custom-conf
               mountPath: /etc/nginx/log_format.conf
               subPath: log_format.conf
@@ -79,10 +69,6 @@ spec:
             - name: nginx-custom-conf
               mountPath: /etc/nginx/templates/gateway/s3_location.conf.template
               subPath: s3_location.conf.template
-            {{- end }}
-            {{- if .Values.logsFilebeat.enabled }}
-            - name: logs
-              mountPath: {{ .Values.logsFilebeat.mountPath }}
             {{- end }}
           ports:
             - containerPort: {{ .Values.env.targetPort }}
@@ -106,15 +92,4 @@ spec:
           resources:
             {{- toYaml .Values.resources.value | nindent 12 }}
           {{- end }}
-        {{- if .Values.logsFilebeat.enabled }}
-        - name: filebeat
-          image: {{ .Values.logsFilebeat.filebeatImage }}
-          args: [ "-c", "/etc/filebeat.yml", "-e" ]
-          volumeMounts:
-            - name: logs
-              mountPath: {{ .Values.logsFilebeat.mountPath }}
-            - name: config
-              mountPath: /etc/filebeat.yml
-              subPath: filebeat.yml
-        {{- end }}
 {{- end }}

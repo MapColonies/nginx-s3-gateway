@@ -1,27 +1,18 @@
 services:
   nginx-s3-gateway:
-    build: ../
+    build:
+      context: ../
+      args:
+        # The MapColonies nginx base image the gateway is built on.
+        # Has no default in the Dockerfile — must be supplied (see .env).
+        NGINX_BASE_IMAGE: ${NGINX_BASE_IMAGE}
     env_file:
       - .env
     ports:
       - 8080:8080
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf.template:ro
-      - ./default.conf:/etc/nginx/templates/default.conf.template:ro
-      - ./redis-get-key.lua:/etc/nginx/lua/redis-get-key.lua:ro
-      - ./redis-set-key.lua:/etc/nginx/lua/redis-set-key.lua:ro
-  redis:
-    image: redis:alpine3.19
-    ports:
-      - 6379:6379
-    env_file:
-      - .env
-    command: >
-      sh -c 'if [ "$REDIS_REQUIRE_PASSWORD" = "true" ]; then
-            exec redis-server --user "$REDIS_USERNAME" on \>"$REDIS_PASSWORD" ~* allcommands;
-        else
-            exec redis-server;
-        fi'
+    depends_on:
+      - minio
+
   minio:
     image: minio/minio:RELEASE.2023-12-09T18-17-51Z.fips
     ports:
@@ -35,7 +26,7 @@ services:
       - MINIO_DEFAULT_BUCKETS=${S3_BUCKET_NAME}
     command: server /data --console-address ":9001"
 
-  # Optional: Sets a default bucket and object in minio
+  # Optional: seeds a default bucket and object in minio
   createBucketAndObjectsOnS3:
     image: minio/mc:RELEASE.2023-12-07T22-13-17Z.fips
     volumes:
