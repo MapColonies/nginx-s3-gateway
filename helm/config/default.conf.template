@@ -74,8 +74,24 @@ server {
         return 404;
     }
 
+    # Liveness: is nginx itself up? Deliberately does NOT touch S3 — a liveness
+    # restart can't fix an S3 outage and would cause a restart storm across all
+    # pods while wiping the local proxy cache.
     location /health {
+        access_log off;
         return 200;
+    }
+
+    # Readiness: is S3 reachable? HEADs a known object through the signed S3 path
+    # so an S3 outage pulls the pod out of the Service (no traffic) without
+    # restarting it. No app auth — internal probe, not a public route.
+    location = /ready {
+        access_log off;
+        proxy_cache off;
+        proxy_method HEAD;
+        # Re-enter the gateway on the object path so the AWS signature is computed
+        # for the object (the signature is derived from the request URI).
+        proxy_pass http://127.0.0.1:8080/{{ .Values.s3.readinessObject | default "liveness.txt" }};
     }
 
     location / {

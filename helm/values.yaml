@@ -92,6 +92,8 @@ s3:
   cacheValidOk: 1h
   cacheValidNotfound: 1m
   cacheValidForbidden: 30s
+  # Object HEADed by the readiness probe to verify S3 reachability. Must exist in the bucket.
+  readinessObject: liveness.txt
   # customServerConf:
   # customLocationConf:
   # sigsVersion: 4

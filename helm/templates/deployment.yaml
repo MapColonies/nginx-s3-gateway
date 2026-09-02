@@ -85,7 +85,7 @@ spec:
             periodSeconds: 5
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready
               port: {{ .Values.env.targetPort }}
             initialDelaySeconds: {{ .Values.initialDelaySeconds }}
           {{- if .Values.resources.enabled }}
