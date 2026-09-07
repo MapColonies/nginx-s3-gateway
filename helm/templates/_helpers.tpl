@@ -36,6 +36,7 @@ helm.sh/chart: {{ include "nginx-s3-gateway.chart" . }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{ include "mclabels.labels" . }}
 {{- end }}
 
 {{/*
@@ -44,18 +45,9 @@ Selector labels
 {{- define "nginx-s3-gateway.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "nginx-s3-gateway.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+{{ include "mclabels.selectorLabels" . }}
 {{- end }}
 
-{{/*
-Returns the environment from global if exists or from the chart's values, defaults to development
-*/}}
-{{- define "nginx-s3-gateway.environment" -}}
-{{- if .Values.global.environment }}
-    {{- .Values.global.environment -}}
-{{- else -}}
-    {{- .Values.environment | default "development" -}}
-{{- end -}}
-{{- end -}}
 {{/*
 Returns the cloud provider name from global if exists or from the chart's values, defaults to minikube
 */}}
@@ -126,4 +118,28 @@ Returns secret name
 */}}
 {{- define "nginx-s3-gateway.secretName" -}}
 {{- printf "s3-%s" (include "nginx-s3-gateway.fullname" .) -}}
+{{- end -}}
+
+{{/*
+Generate OpenTelemetry ratio sampler split_clients block
+*/}}
+{{- define "nginx-s3-gateway.otelRatioSampler" -}}
+split_clients "$otel_trace_id" $ratio_sampler {
+              {{ .Values.opentelemetry.ratio }}%              on;
+              *                off;
+}
+{{- end -}}
+
+{{/*
+Generate OpenTelemetry trace configuration
+*/}}
+{{- define "nginx-s3-gateway.otelTrace" -}}
+{{- if eq .Values.opentelemetry.samplerMethod "AlwaysOn" -}}
+otel_trace on;
+{{- else if eq .Values.opentelemetry.samplerMethod "TraceIdRatioBased" -}}
+otel_trace $ratio_sampler;
+{{- else -}}
+otel_trace off;
+{{- end -}}
+otel_trace_context propagate;
 {{- end -}}

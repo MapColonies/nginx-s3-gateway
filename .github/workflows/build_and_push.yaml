@@ -3,7 +3,7 @@ name: Build and push artifacts
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
   workflow_dispatch:
     inputs:
@@ -19,13 +19,41 @@ permissions:
 
 jobs:
   build_and_push_docker:
-      uses: MapColonies/shared-workflows/.github/workflows/build-and-push-docker.yaml@v4
-      secrets: inherit
-      with:
-        scope: common
+    name: Build and publish docker image to registry
+    runs-on: ubuntu-latest
+    env:
+      NGINX_BASE_TAG: v2.3.1
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.ACR_URL }}
+          username: ${{ secrets.ACR_PUSH_USER }}
+          password: ${{ secrets.ACR_PUSH_TOKEN }}
+
+      - name: Build and push docker image
+        run: |
+          IMAGE="${{ secrets.ACR_URL }}/common/${{ github.event.repository.name }}:${{ github.ref_name }}"
+          IMAGE="${IMAGE,,}"
+          docker build \
+            --build-arg NGINX_BASE_IMAGE="${{ secrets.ACR_URL }}/common/nginx:${NGINX_BASE_TAG}" \
+            -t "${IMAGE}" .
+          docker push "${IMAGE}"
+
+  update_docker_artifact:
+    uses: MapColonies/shared-workflows/.github/workflows/update-artifacts-file.yaml@v4
+    secrets: inherit
+    needs: build_and_push_docker
+    with:
+      scope: common
+      artifact-name: ${{ github.event.repository.name }}
+      artifact-tag: ${{ github.ref_name }}
 
   build_and_push_helm:
-      uses: MapColonies/shared-workflows/.github/workflows/build-and-push-helm.yaml@v4
-      secrets: inherit
-      with:
-        scope: common
+    uses: MapColonies/shared-workflows/.github/workflows/build-and-push-helm.yaml@v4
+    secrets: inherit
+    with:
+      scope: common
