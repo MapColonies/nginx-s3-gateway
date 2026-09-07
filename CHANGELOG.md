@@ -6,7 +6,6 @@
 ### ⚠ BREAKING CHANGES
 
 * image base and entrypoint change; nginx config is now the official gateway template model.
-* image base and entrypoint change; nginx config is now the official gateway template model.
 
 ### Features
 
