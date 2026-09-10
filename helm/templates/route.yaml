@@ -2,28 +2,42 @@
 {{- if and (and (.Values.enabled) (eq $cloudProviderFlavor "openshift")) (.Values.route.enabled) -}}
 {{- $releaseName := .Release.Name -}}
 {{- $chartName := include "nginx-s3-gateway.name" . -}}
+{{- $svcName := printf "%s-%s" $releaseName $chartName -}}
+{{- $route := .Values.route -}}
+{{- range $index, $routesMapping := $route.routesMapping }}
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: {{ $releaseName }}-{{ $chartName }}
-  annotations:
-    haproxy.router.openshift.io/rewrite-target: /
-spec:
-  {{- if .Values.route.host }}
-  host: {{ .Values.route.host | quote }}
+  {{- if eq (len $route.routesMapping) 1 }}
+  name: {{ $svcName }}
+  {{- else }}
+  name: {{ printf "%s-%d" $svcName (add1 $index) }}
   {{- end }}
-  path: {{ .Values.route.path | default "/" }}
+  annotations:
+    {{- if $route.rewriteTarget }}
+    haproxy.router.openshift.io/rewrite-target: {{ $route.rewriteTarget }}
+    {{- end }}
+    {{- if $route.timeout.enabled }}
+    haproxy.router.openshift.io/timeout: {{ $route.timeout.duration }}
+    {{- end }}
+spec:
+  {{- if $routesMapping.host }}
+  host: {{ $routesMapping.host | quote }}
+  {{- end }}
+  path: {{ $routesMapping.path | default "/" }}
   to:
     kind: Service
-    name: {{ $releaseName }}-{{ $chartName }}
-  {{- if .Values.route.tls.enabled }}
+    name: {{ $svcName }}
+  {{- if $route.tls.enabled }}
   tls:
-    termination: edge
-    {{- if .Values.route.tls.useCert }}
-    certificate: {{ .Values.route.tls.certificate | quote }}
-    key: {{ .Values.route.tls.key | quote }}
-    caCertificate: {{ .Values.route.tls.caCertificate | quote }}
-    insecureEdgeTerminationPolicy: Redirect
+    termination: {{ $route.tls.termination | quote }}
+    insecureEdgeTerminationPolicy: {{ $route.tls.insecureEdgeTerminationPolicy | quote }}
+    {{- if $route.tls.useCerts }}
+    certificate: {{ $route.tls.certificate | quote }}
+    key: {{ $route.tls.key | quote }}
+    caCertificate: {{ $route.tls.caCertificate | quote }}
     {{- end }}
   {{- end }}
+{{ printf "---" }}
+{{- end }}
 {{- end -}}

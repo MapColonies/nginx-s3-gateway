@@ -74,11 +74,21 @@ ingress:
 
 route:
   enabled: true
-  host:
-  path: /
+  routesMapping:
+    - path: /
+      host:
+  timeout:
+    enabled: false
+    duration: 60s # supported units (us, ms, s, m, h, d)
+  rewriteTarget: ""
   tls:
     enabled: true
-    useCert: true
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+    useCerts: false
+    certificate: ""
+    key: ""
+    caCertificate: ""
 
 s3:
   bucketName: bucket
