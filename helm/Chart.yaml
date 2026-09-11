@@ -1,8 +1,8 @@
 apiVersion: v2
 name: nginx-s3-gateway
 description: Helm chart for nginx-s3-gateway
-version: 4.0.0
-appVersion: 4.0.0
+version: 5.0.0
+appVersion: 5.0.0
 dependencies:
   - name: mclabels
     version: 1.1.0
