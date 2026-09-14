@@ -1,5 +1,21 @@
 # Changelog
 
+## [5.0.0](https://github.com/MapColonies/nginx-s3-gateway/compare/v4.0.0...v5.0.0) (2026-09-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* route.host/route.path are removed in favor of route.routesMapping; route.tls.useCert is renamed to route.tls.useCerts.
+
+### Bug Fixes
+
+* readiness probe returns truncated response ([#30](https://github.com/MapColonies/nginx-s3-gateway/issues/30)) ([f25b107](https://github.com/MapColonies/nginx-s3-gateway/commit/f25b107f23a1cdc5626d76b526e462ced883a531))
+
+
+### Helm Changes
+
+* support multiple openshift routes ([#31](https://github.com/MapColonies/nginx-s3-gateway/issues/31)) ([f3dc439](https://github.com/MapColonies/nginx-s3-gateway/commit/f3dc439ca2281d7f6bd91dfec02dec98aa28de59))
+
 ## [4.0.0](https://github.com/MapColonies/nginx-s3-gateway/compare/v3.0.2...v4.0.0) (2026-09-07)
 
 
