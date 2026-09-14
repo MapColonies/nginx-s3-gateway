@@ -61,6 +61,9 @@ spec:
             - name: nginx-custom-conf
               mountPath: /etc/nginx/nginx.conf
               subPath: nginx.conf.template
+            - name: nginx-custom-conf
+              mountPath: /etc/nginx/conf.d/gzip_compression.conf
+              subPath: gzip_compression.conf
             {{- if .Values.s3.customServerConf }}
             - name: nginx-custom-conf
               mountPath: /etc/nginx/templates/gateway/s3_server.conf.template
