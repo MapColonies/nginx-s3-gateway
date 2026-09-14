@@ -88,13 +88,12 @@ server {
         return 200;
     }
 
-    # Readiness: is S3 reachable? HEADs a known object through the signed S3 path
+    # Readiness: is S3 reachable? Fetches a known object through the signed S3 path
     # so an S3 outage pulls the pod out of the Service (no traffic) without
     # restarting it. No app auth — internal probe, not a public route.
     location = /ready {
         access_log off;
         proxy_cache off;
-        proxy_method HEAD;
         # Re-enter the gateway on the object path so the AWS signature is computed
         # for the object (the signature is derived from the request URI).
         proxy_pass http://127.0.0.1:8080/{{ .Values.s3.readinessObject | default "liveness.txt" }};
