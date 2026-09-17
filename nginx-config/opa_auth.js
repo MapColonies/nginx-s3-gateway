@@ -1,16 +1,5 @@
 import base from "/etc/nginx/auth.js";
 
-// OPA policies return either a single `reason` or a `reasons` array; mirrors base opaAuth.
-function denyReason(opaResult) {
-  if (opaResult.reason) {
-    return opaResult.reason;
-  }
-  if (opaResult.reasons) {
-    return opaResult.reasons.join(", ");
-  }
-  return "Access denied - no reason provided";
-}
-
 // Combined auth handler: OPA check then S3 credential retrieval.
 async function combinedAuth(r) {
   try {
@@ -28,7 +17,7 @@ async function combinedAuth(r) {
 
       const opaResult = JSON.parse(opaResp.responseText).result;
       if (!opaResult.allowed) {
-        const reason = denyReason(opaResult);
+        const reason = base.opaDenyReason(opaResult);
         r.error(reason);
         r.headersOut['X-OPA-Result'] = 'false';
         r.headersOut['X-OPA-Reason'] = reason;
