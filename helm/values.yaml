@@ -113,3 +113,4 @@ gzip:
   minLength: 256
   proxied: any
   vary: "on"
+  types:
