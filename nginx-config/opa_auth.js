@@ -10,8 +10,8 @@ async function combinedAuth(r) {
       });
 
       if (opaResp.status > 500) {
-        r.headersOut['X-OPA-Result'] = 'error';
-        r.headersOut['X-OPA-Reason'] = '';
+        r.variables.opa_result = 'error';
+        r.variables.opa_reason = '';
         return r.return(opaResp.status);
       }
 
@@ -19,21 +19,21 @@ async function combinedAuth(r) {
       if (!opaResult.allowed) {
         const reason = base.opaDenyReason(opaResult);
         r.error(reason);
-        r.headersOut['X-OPA-Result'] = 'false';
-        r.headersOut['X-OPA-Reason'] = reason;
+        r.variables.opa_result = 'false';
+        r.variables.opa_reason = reason;
         const code = reason.includes("no token supplied") ? 401 : 403;
         return r.return(code);
       }
 
-      r.headersOut['X-OPA-Result'] = 'true';
-      r.headersOut['X-OPA-Reason'] = '';
+      r.variables.opa_result = 'true';
+      r.variables.opa_reason = '';
     }
 
     const credResp = await r.subrequest("/aws/credentials/retrieve");
     r.return(credResp.status);
   } catch (error) {
     r.error(error);
-    r.headersOut['X-OPA-Result'] = 'error';
+    r.variables.opa_result = 'error';
     r.return(500);
   }
 }
