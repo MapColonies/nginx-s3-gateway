@@ -113,4 +113,5 @@ gzip:
   minLength: 256
   proxied: any
   vary: "on"
+  # types: []  # note: empty list falls back to defaults, doesn't clear them
   types:
