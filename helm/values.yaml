@@ -108,7 +108,7 @@ aws:
   sigsVersion: 4
 
 gzip:
-  enabled: true
+  enabled: false
   compLevel: 5
   minLength: 256
   proxied: any
