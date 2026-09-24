@@ -116,3 +116,12 @@ s3:
 
 aws:
   sigsVersion: 4
+
+gzip:
+  enabled: false
+  compLevel: 5
+  minLength: 256
+  proxied: any
+  vary: "on"
+  # types: []  # note: empty list falls back to defaults, doesn't clear them
+  types:
