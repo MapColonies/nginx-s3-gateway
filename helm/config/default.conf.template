@@ -135,8 +135,6 @@ server {
         set $domain {{ .Values.authorization.opa.domain }};
         {{ if .Values.authorization.s3.enabled }}
         auth_request /_combined_auth;
-        auth_request_set $opa_result $upstream_http_x_opa_result;
-        auth_request_set $opa_reason $upstream_http_x_opa_reason;
         {{ else }}
         auth_request /_opa_auth;
         {{ end }}
