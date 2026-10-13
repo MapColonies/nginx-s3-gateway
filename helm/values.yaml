@@ -92,6 +92,8 @@ route:
 
 s3:
   bucketName: bucket
+  # Existing Secret with keys accessKeyId and secretAccessKey; when set, the two values below are ignored.
+  secretName: ""
   accessKeyId: common
   secretAccessKey: commonPassword
   server: localhost

@@ -117,7 +117,7 @@ Returns the tracing url from global if exists or from the chart's values
 Returns secret name
 */}}
 {{- define "nginx-s3-gateway.secretName" -}}
-{{- printf "s3-%s" (include "nginx-s3-gateway.fullname" .) -}}
+{{- .Values.s3.secretName | default (printf "s3-%s" (include "nginx-s3-gateway.fullname" .)) -}}
 {{- end -}}
 
 {{/*

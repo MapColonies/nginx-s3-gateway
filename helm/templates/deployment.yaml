@@ -78,9 +78,18 @@ spec:
             {{- end }}
           ports:
             - containerPort: {{ .Values.env.targetPort }}
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "nginx-s3-gateway.secretName" . }}
+                  key: accessKeyId
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "nginx-s3-gateway.secretName" . }}
+                  key: secretAccessKey
           envFrom:
-            - secretRef:
-                name: {{ template "nginx-s3-gateway.secretName" . }}
             - configMapRef:
                 name: {{ $releaseName }}-{{ $chartName }}-configmap
           livenessProbe:
