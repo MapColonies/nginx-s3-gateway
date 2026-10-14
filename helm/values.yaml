@@ -100,7 +100,12 @@ s3:
   region: us-east-1
   style: path
   debug: true
-  corsEnabled: true
+  cors:
+    enabled: true
+    allowedOrigins: '*'
+    allowedHeaders: '*'
+    allowedMethods: GET, POST, OPTIONS
+    maxAge: 1728000
   nginxWorkerProcesses: 4
   cacheMaxSize: 10g
   cacheInactive: 60m

@@ -66,6 +66,11 @@ spec:
               mountPath: /etc/nginx/conf.d/gzip_compression.conf
               subPath: gzip_compression.conf
             {{- end }}
+            {{- if .Values.s3.cors.enabled }}
+            - name: nginx-custom-conf
+              mountPath: /etc/nginx/templates/gateway/cors.conf.template
+              subPath: cors.conf.template
+            {{- end }}
             {{- if .Values.s3.customServerConf }}
             - name: nginx-custom-conf
               mountPath: /etc/nginx/templates/gateway/s3_server.conf.template
