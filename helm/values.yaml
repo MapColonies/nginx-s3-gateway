@@ -92,8 +92,10 @@ route:
 
 s3:
   bucketName: bucket
-  # Existing Secret with keys accessKeyId and secretAccessKey; when set, the two values below are ignored.
-  secretName: ""
+  # Secret with keys accessKeyId and secretAccessKey; must already exist unless createSecret is true.
+  secretName: s3-secret
+  createSecret: false
+  # used only when createSecret is true
   accessKeyId: common
   secretAccessKey: commonPassword
   server: localhost
