@@ -3,6 +3,9 @@ global:
   tracing: {}
   metrics: {}
   allowDirectoryList: false
+  storage:
+    s3:
+      secretName: ""
 
 splunkIndex: ''
 
@@ -92,8 +95,11 @@ route:
 
 s3:
   bucketName: bucket
-  accessKeyId: common
-  secretAccessKey: commonPassword
+  # Secret with keys accessKeyId and secretAccessKey (default s3-<release>-<chart>); must already exist unless createSecret is true. Empty values fall back to global.storage.s3.
+  secretName: ""
+  createSecret: false
+  accessKeyId: ""
+  secretAccessKey: ""
   server: localhost
   serverPort: 9000
   serverProto: http

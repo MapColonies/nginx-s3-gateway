@@ -116,8 +116,17 @@ Returns the tracing url from global if exists or from the chart's values
 {{/*
 Returns secret name
 */}}
+{{/*
+S3 credential settings: the chart's s3 values, with empty ones taken from global.storage.s3 (as in the raster charts).
+*/}}
+{{- define "nginx-s3-gateway.s3Credentials" -}}
+{{- $global := dig "storage" "s3" dict (.Values.global | default dict) -}}
+{{- merge (pick .Values.s3 "secretName" "createSecret" "accessKeyId" "secretAccessKey") (pick $global "secretName" "createSecret" "accessKeyId" "secretAccessKey") | toYaml -}}
+{{- end -}}
+
 {{- define "nginx-s3-gateway.secretName" -}}
-{{- printf "s3-%s" (include "nginx-s3-gateway.fullname" .) -}}
+{{- $s3 := include "nginx-s3-gateway.s3Credentials" . | fromYaml -}}
+{{- $s3.secretName | default (printf "s3-%s" (include "nginx-s3-gateway.fullname" .)) -}}
 {{- end -}}
 
 {{/*
