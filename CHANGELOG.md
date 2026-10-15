@@ -1,5 +1,16 @@
 # Changelog
 
+## [6.0.0](https://github.com/MapColonies/nginx-s3-gateway/compare/v5.0.0...v6.0.0) (2026-10-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* the chart no longer creates an S3 Secret by default. Provide a Secret (default name s3-secret) with keys accessKeyId and secretAccessKey, or set s3.createSecret: true to keep the old behaviour.
+
+### Helm Changes
+
+* support an existing S3 Secret (s3.secretName, s3.createSecret) MAPCO-11830 ([#36](https://github.com/MapColonies/nginx-s3-gateway/issues/36)) ([288918a](https://github.com/MapColonies/nginx-s3-gateway/commit/288918a5c78bffcc4dfcc8308eefe018a1d63e01))
+
 ## [5.0.0](https://github.com/MapColonies/nginx-s3-gateway/compare/v4.0.0...v5.0.0) (2026-09-24)
 
 
