@@ -1,4 +1,4 @@
-{{- $cors := .Values.s3.cors -}}
+{{- $cors := .Values.cors -}}
 set $request_cors "${request_method}_${CORS_ENABLED}";
 
 if ($request_cors = "OPTIONS_1") {
