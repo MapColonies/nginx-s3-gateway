@@ -17,7 +17,7 @@ data:
   DEBUG: {{ quote .Values.s3.debug }}
   AWS_SIGS_VERSION: {{ quote .Values.aws.sigsVersion }}
   ALLOW_DIRECTORY_LIST: {{ quote .Values.global.allowDirectoryList }}
-  CORS_ENABLED: {{ quote .Values.s3.corsEnabled }}
+  CORS_ENABLED: {{ quote .Values.cors.enabled }}
   NGINX_WORKER_PROCESSES: {{ quote .Values.s3.nginxWorkerProcesses }}
   PROXY_CACHE_MAX_SIZE: {{ quote .Values.s3.cacheMaxSize }}
   PROXY_CACHE_INACTIVE: {{ quote .Values.s3.cacheInactive }}

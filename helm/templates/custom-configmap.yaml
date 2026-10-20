@@ -12,6 +12,9 @@ data:
   {{ if .Values.gzip.enabled }}
   gzip_compression.conf: {{ tpl (.Files.Get "config/gzip_compression.conf") . | quote }}
   {{ end }}
+  {{ if .Values.cors.enabled }}
+  cors.conf.template: {{ tpl (.Files.Get "config/cors.conf.template") . | quote }}
+  {{ end }}
   {{ if .Values.s3.customServerConf }}
   s3_server.conf.template: {{ quote .Values.s3.customServerConf }}
   {{ end }}
