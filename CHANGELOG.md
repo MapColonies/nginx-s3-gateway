@@ -1,5 +1,16 @@
 # Changelog
 
+## [7.0.0](https://github.com/MapColonies/nginx-s3-gateway/compare/v6.0.0...v7.0.0) (2026-10-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* make CORS response headers configurable (MAPCO-11962) ([#37](https://github.com/MapColonies/nginx-s3-gateway/issues/37))
+
+### Helm Changes
+
+* make CORS response headers configurable (MAPCO-11962) ([#37](https://github.com/MapColonies/nginx-s3-gateway/issues/37)) ([9637b32](https://github.com/MapColonies/nginx-s3-gateway/commit/9637b324b163275aca095ca85959ce836621ac96))
+
 ## [6.0.0](https://github.com/MapColonies/nginx-s3-gateway/compare/v5.0.0...v6.0.0) (2026-10-15)
 
 
