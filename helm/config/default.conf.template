@@ -1,5 +1,6 @@
 js_import /etc/nginx/include/awscredentials.js;
 js_import /etc/nginx/include/s3gateway.js;
+js_import listing_json from /etc/nginx/listing_json.js;
 
 
 # We include only the variables needed for the authentication signatures that
@@ -253,7 +254,17 @@ server {
         include /etc/nginx/conf.d/gateway/s3listing_location.conf;
     }
 
+    # Directory listing requests land here first. The actual listing is
+    # rendered as either HTML (via XSLT) or JSON, but xslt_stylesheet/
+    # xslt_types are per-location directives evaluated at config-parse time,
+    # so the two can't be toggled at runtime within one location. This is a
+    # thin dispatcher that picks the right one based on the client's Accept
+    # header before nginx commits to a location's static config.
     location @s3Directory {
+        js_content listing_json.dispatchDirectoryFormat;
+    }
+
+    location @s3DirectoryHtml {
         # We include only the headers needed for the authentication signatures that
         # we plan to use.
         include /etc/nginx/conf.d/gateway/v${AWS_SIGS_VERSION}_headers.conf;
@@ -312,6 +323,30 @@ server {
 
         proxy_pass  ${S3_SERVER_PROTO}://storage_urls$s3Uri;
         include /etc/nginx/conf.d/gateway/s3listing_location.conf;
+    }
+
+    # Same directory listing as above, but rendered as JSON instead of HTML
+    # for clients that send "Accept: application/json" (this is axios's
+    # default Accept header, so no client-side config is needed). Response
+    # shape: { path, entries: [{ name, type: "file"|"directory", size, lastModified }] }.
+    #
+    # This fetches S3 directly via njs (ngx.fetch) instead of proxy_pass +
+    # js_body_filter: a body filter alone, with no XSLT (or other
+    # body-transforming filter) also attached to the location, does not
+    # reliably receive the proxied response body in testing - the fetch
+    # succeeds but the filter is handed empty chunks. Fetching straight from
+    # njs sidesteps that filter-chain dependency entirely.
+    #
+    # Note: unlike the HTML variant, FOUR_O_FOUR_ON_EMPTY_BUCKET is not
+    # honored here (it relies on breaking the XSLT transform) - an empty
+    # directory returns 200 with an empty entries array.
+    location @s3DirectoryJson {
+        set $forIndexPage false;
+
+        include /etc/nginx/conf.d/gateway/cors.conf;
+        include /etc/nginx/conf.d/gateway/js_fetch_trusted_certificate.conf;
+
+        js_content listing_json.serveDirectoryJson;
     }
 
     location ~ /index.html$ {
