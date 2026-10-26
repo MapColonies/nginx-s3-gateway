@@ -1,10 +1,7 @@
 import s3gateway from "/etc/nginx/include/s3gateway.js";
 
-// Entry point for the "@s3Directory" named location. Decides, per request,
-// whether the client wants the HTML (XSLT) listing or a JSON listing, and
-// forwards to the matching variant. XSLT transforms are configured
-// statically per-location, so the format choice has to happen before nginx
-// picks a location, not inside a shared one.
+// XSLT is configured per-location at parse time, so the HTML/JSON choice must
+// happen before nginx picks a location, not inside a shared one.
 function dispatchDirectoryFormat(r) {
     r.internalRedirect(_wantsJson(r) ? "@s3DirectoryJson" : "@s3DirectoryHtml");
 }
@@ -14,18 +11,8 @@ function _wantsJson(r) {
     return accept.toLowerCase().indexOf('application/json') !== -1;
 }
 
-/**
- * Serves the JSON directory listing. Fetches the S3 ListBucketResult XML
- * directly via ngx.fetch (the same pattern the vendor s3gateway.loadContent
- * uses) rather than proxy_pass + js_body_filter: a body filter on its own,
- * with no XSLT (or other body-transforming filter) also attached to the
- * location, does not reliably receive the proxied response body in this
- * nginx/njs build - it's handed empty chunks even though the upstream fetch
- * itself succeeds. Doing the S3 call directly from njs sidesteps that filter
- * chain entirely.
- *
- * @param r {NginxHTTPRequest} HTTP request object
- */
+// Fetches the listing XML directly via ngx.fetch rather than proxy_pass + js_body_filter:
+// a body filter alone, with no XSLT also on the location, doesn't reliably get the body here.
 async function serveDirectoryJson(r) {
     const proto = process.env['S3_SERVER_PROTO'];
     const server = process.env['S3_SERVER'];
@@ -67,22 +54,10 @@ async function serveDirectoryJson(r) {
     r.return(200, json);
 }
 
-/**
- * Converts an S3 ListBucketResult XML document into a simplified JSON shape:
- * { path, entries: [{ name, type, size, lastModified }] }
- *
- * Deliberately avoids depending on njs's XML support (version-dependent) in
- * favor of a small manual extractor, since ListBucketResult's shape is fixed
- * and shallow.
- *
- * @param xml {string} S3 ListBucketResult XML document
- * @returns {{path: string, entries: Array<Object>}}
- */
+// Converts a ListBucketResult XML doc to { path, entries: [{ name, type, size, lastModified }] }.
 function _parseListBucketResult(xml) {
     const rootPath = process.env['DIRECTORY_LISTING_PATH_PREFIX'] || '';
-    // The root <Prefix> is self-closed ("<Prefix />") when empty, so a
-    // closing-tag match would skip it and pick up a nested CommonPrefixes
-    // <Prefix> instead. Match either form, preferring one with content.
+    // Root <Prefix> is self-closed when empty; match either form, preferring one with content.
     const prefixMatch = /<Prefix>([\s\S]*?)<\/Prefix>|<Prefix\s*\/>/.exec(xml);
     const globalPrefix = prefixMatch && prefixMatch[1] ? _decodeXmlEntities(prefixMatch[1]) : '';
 
@@ -103,7 +78,8 @@ function _parseListBucketResult(xml) {
             name: full.substring(globalPrefix.length).replace(/\/$/, ''),
             type: 'directory',
             size: null,
-            lastModified: null
+            lastModified: null,
+            href: _buildHref(rootPath, full)
         });
     }
 
@@ -124,7 +100,8 @@ function _parseListBucketResult(xml) {
             name: key.substring(globalPrefix.length),
             type: 'file',
             size: sizeMatch ? Number(sizeMatch[1]) : null,
-            lastModified: lastModifiedMatch ? lastModifiedMatch[1] : null
+            lastModified: lastModifiedMatch ? lastModifiedMatch[1] : null,
+            href: _buildHref(rootPath, key)
         });
     }
 
@@ -132,6 +109,12 @@ function _parseListBucketResult(xml) {
         path: rootPath + globalPrefix,
         entries
     };
+}
+
+// Per-segment percent-encoding, matching listing.xsl's encode-uri template.
+function _buildHref(rootPath, path) {
+    const encoded = (rootPath + path).split('/').map((seg) => seg ? s3gateway._encodeURIComponent(seg) : seg).join('/');
+    return '/' + encoded;
 }
 
 const XML_ENTITIES = {
@@ -157,7 +140,6 @@ function _decodeXmlEntities(value) {
 export default {
     dispatchDirectoryFormat,
     serveDirectoryJson,
-    // Exposed only so unit tests can exercise it directly.
     _parseListBucketResult,
     _decodeXmlEntities
 };

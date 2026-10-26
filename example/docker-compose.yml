@@ -3,18 +3,10 @@ services:
     build:
       context: ../
       args:
-        # The MapColonies nginx base image the gateway is built on.
-        # Has no default in the Dockerfile — must be supplied (see .env).
         NGINX_BASE_IMAGE: ${NGINX_BASE_IMAGE}
     env_file:
       - .env
     volumes:
-      # The k8s Deployment mounts these over the vendor's own copies (via the
-      # Helm ConfigMap) to apply the gateway's customizations - OPA/readiness
-      # routes, otel/njs/xslt module loading, the JSON directory listing.
-      # docker-compose has no Helm templating step, so these are committed
-      # here pre-rendered (Helm {{ }} conditionals resolved; ${VAR} left
-      # in place for the entrypoint's own envsubst pass).
       - ./default.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./log_format.conf:/etc/nginx/log_format.conf:ro
@@ -23,10 +15,6 @@ services:
     depends_on:
       - minio
 
-  # S3-compatible local server. MinIO's Docker Hub images now require a paid
-  # login to pull (locked down after the RELEASE.2023-12-09 tag used here
-  # previously), so this uses LocalStack's S3 emulation instead - no auth
-  # needed to pull it.
   minio:
     image: localstack/localstack:3
     ports:
@@ -43,7 +31,6 @@ services:
       timeout: 2s
       retries: 30
 
-  # Optional: seeds a default bucket and object in the S3 emulator
   createBucketAndObjectsOnS3:
     image: amazon/aws-cli:2.17.62
     volumes:

@@ -12,7 +12,8 @@ metadata:
     release: {{ $releaseName }}
     {{- include "nginx-s3-gateway.labels" . | nindent 4 }}
   annotations:
-    # this job reads the release's own ConfigMap/Secret for S3 config and credentials, which don't exist yet before a first install.
+    # post-install/post-upgrade, not pre-*: needs the release's own ConfigMap/Secret already applied.
+    "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-weight": "-5"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:

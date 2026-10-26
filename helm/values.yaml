@@ -38,6 +38,7 @@ opentelemetry:
 
 image:
   repository: common/nginx-s3-gateway
+  tag: dev-json-listing-2
 
 enabled: true
 initialDelaySeconds: 10
@@ -114,9 +115,9 @@ s3:
   cacheValidForbidden: 30s
   # Object HEADed by the readiness probe to verify S3 reachability. Must exist in the bucket.
   readinessObject: liveness.txt
-  # When true, a pre-install/pre-upgrade Helm hook job uploads s3.readinessObject to the bucket automatically
+  # When true, a Helm hook job uploads readinessObject to the bucket automatically.
   seedReadinessObject: true
-  appendSlashForPossibleDirectory: false
+  appendSlashForPossibleDirectory: true
   # customServerConf:
   # customLocationConf:
   # sigsVersion: 4
