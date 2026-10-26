@@ -24,8 +24,7 @@ docker-compose up -d --build
 The stack contains 3 containers:
 
 1. **nginx-s3-gateway** — built from `../Dockerfile`, configured via env in `.env`.
-2. **minio** — local S3 emulator (LocalStack, despite the service name kept for compatibility
-   with `.env`).
+2. **s3** — local S3 emulator (LocalStack).
 3. **createBucketAndObjectsOnS3** — one-shot job that creates the bucket and seeds the
    objects from `minioData/` (optional).
 
@@ -47,16 +46,17 @@ take effect. `docker-compose` has no Helm templating step, so this folder's `ngi
 `default.conf.template`, and `log_format.conf` are committed as pre-rendered, static
 equivalents (Helm conditionals resolved for a plain default setup: OPA disabled, otel
 tracing off but the module loaded). If you change `helm/config/*.template`, re-render these
-to match, e.g.:
+with:
 
 ```bash
-helm template test ../helm --set s3.nginxWorkerProcesses=4 \
-  --show-only templates/custom-configmap.yaml
+../scripts/render-example-config.sh
 ```
 
-and copy the `default.conf.template` / `nginx.conf.template` / `log_format.conf` entries
-out of that output into this folder (resolving any remaining `{{ }}` by hand if your
-`--set` values don't cover every conditional). Note: `helm template` on this chart needs
-the private `mclabels` dependency (`helm/Chart.yaml`) resolved first (`helm dependency
-build`, or stub it out locally) - it isn't needed for the two files this example actually
-uses, but `helm template` won't render anything until the dependency check passes.
+or check whether they're already in sync (exits nonzero on drift, e.g. for CI) with:
+
+```bash
+../scripts/render-example-config.sh --check
+```
+
+Both need the private `mclabels` Helm dependency (`helm/Chart.yaml`) resolved first
+(`helm dependency build ../helm`) - the script runs that automatically.

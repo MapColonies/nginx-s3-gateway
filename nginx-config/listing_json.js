@@ -3,6 +3,15 @@ import utils from "/etc/nginx/include/utils.js";
 
 const FOUR_O_FOUR_ON_EMPTY_BUCKET = utils.parseBoolean(process.env['FOUR_O_FOUR_ON_EMPTY_BUCKET']);
 
+// cors.conf's per-method `if` blocks each define their own add_header set, which under
+// nginx's add_header inheritance rule means a bare add_header at the location level never
+// reaches most requests - so Vary has to be set here instead, via the header filter that
+// already runs unconditionally for this location.
+function htmlListingHeaders(r) {
+    s3gateway.editHeaders(r);
+    r.headersOut['Vary'] = 'Accept';
+}
+
 // XSLT is configured per-location at parse time, so the HTML/JSON choice must
 // happen before nginx picks a location, not inside a shared one.
 function dispatchDirectoryFormat(r) {
@@ -61,6 +70,7 @@ async function serveDirectoryJson(r) {
     }
 
     r.headersOut['Content-Type'] = 'application/json; charset=utf-8';
+    r.headersOut['Vary'] = 'Accept';
     r.return(200, JSON.stringify(result));
 }
 
@@ -115,9 +125,14 @@ function _parseListBucketResult(xml) {
         });
     }
 
+    const truncatedMatch = /<IsTruncated>([\s\S]*?)<\/IsTruncated>/.exec(xml);
+    const tokenMatch = /<NextContinuationToken>([\s\S]*?)<\/NextContinuationToken>/.exec(xml);
+
     return {
         path: rootPath + globalPrefix,
-        entries
+        entries,
+        truncated: truncatedMatch ? truncatedMatch[1] === 'true' : false,
+        nextContinuationToken: tokenMatch ? _decodeXmlEntities(tokenMatch[1]) : null
     };
 }
 
@@ -150,6 +165,5 @@ function _decodeXmlEntities(value) {
 export default {
     dispatchDirectoryFormat,
     serveDirectoryJson,
-    _parseListBucketResult,
-    _decodeXmlEntities
+    htmlListingHeaders
 };

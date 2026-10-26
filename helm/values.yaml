@@ -38,7 +38,6 @@ opentelemetry:
 
 image:
   repository: common/nginx-s3-gateway
-  tag: dev-json-listing-2
 
 enabled: true
 initialDelaySeconds: 10

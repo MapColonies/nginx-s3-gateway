@@ -228,12 +228,8 @@ server {
         include /etc/nginx/conf.d/gateway/s3listing_location.conf;
     }
 
-    # Directory listing requests land here first. The actual listing is
-    # rendered as either HTML (via XSLT) or JSON, but xslt_stylesheet/
-    # xslt_types are per-location directives evaluated at config-parse time,
-    # so the two can't be toggled at runtime within one location. This is a
-    # thin dispatcher that picks the right one based on the client's Accept
-    # header before nginx commits to a location's static config.
+    # xslt_stylesheet is per-location at parse time, so format is picked here before
+    # nginx commits to @s3DirectoryHtml or @s3DirectoryJson.
     location @s3Directory {
         js_content listing_json.dispatchDirectoryFormat;
     }
@@ -272,7 +268,7 @@ server {
         # We strip off all of the AWS specific headers from the server so that
         # there is nothing identifying the object as having originated in an
         # object store.
-        js_header_filter s3gateway.editHeaders;
+        js_header_filter listing_json.htmlListingHeaders;
 
         # Apply XSL transformation to the XML returned from S3 directory listing
         # results such that we can output an HTML directory contents list.
@@ -299,21 +295,9 @@ server {
         include /etc/nginx/conf.d/gateway/s3listing_location.conf;
     }
 
-    # Same directory listing as above, but rendered as JSON instead of HTML
-    # for clients that send "Accept: application/json" (this is axios's
-    # default Accept header, so no client-side config is needed). Response
-    # shape: { path, entries: [{ name, type: "file"|"directory", size, lastModified }] }.
-    #
-    # This fetches S3 directly via njs (ngx.fetch) instead of proxy_pass +
-    # js_body_filter: a body filter alone, with no XSLT (or other
-    # body-transforming filter) also attached to the location, does not
-    # reliably receive the proxied response body in testing - the fetch
-    # succeeds but the filter is handed empty chunks. Fetching straight from
-    # njs sidesteps that filter-chain dependency entirely.
-    #
-    # Note: unlike the HTML variant, FOUR_O_FOUR_ON_EMPTY_BUCKET is not
-    # honored here (it relies on breaking the XSLT transform) - an empty
-    # directory returns 200 with an empty entries array.
+    # Same listing, rendered as JSON for "Accept: application/json" (axios's default).
+    # FOUR_O_FOUR_ON_EMPTY_BUCKET isn't honored here - empty dir returns 200, empty entries.
+    # Also not cached (js_content doesn't go through proxy_cache) - every request hits S3 live.
     location @s3DirectoryJson {
         set $forIndexPage false;
 

@@ -294,7 +294,7 @@ server {
         # We strip off all of the AWS specific headers from the server so that
         # there is nothing identifying the object as having originated in an
         # object store.
-        js_header_filter s3gateway.editHeaders;
+        js_header_filter listing_json.htmlListingHeaders;
 
         # Apply XSL transformation to the XML returned from S3 directory listing
         # results such that we can output an HTML directory contents list.
