@@ -32,15 +32,21 @@ async function serveDirectoryJson(r) {
     const port = process.env['S3_SERVER_PORT'];
     const url = `${proto}://${server}:${port}${s3gateway.s3uri(r)}`;
 
+    const headers = {
+        'Authorization': r.variables.s3auth,
+        'X-Amz-Security-Token': r.variables.awsSessionToken,
+        'Host': r.variables.s3_host
+    };
+    if (r.variables.awsDate) {
+        headers['x-amz-date'] = r.variables.awsDate;
+    }
+    if (r.variables.awsPayloadHash) {
+        headers['x-amz-content-sha256'] = r.variables.awsPayloadHash;
+    }
+
     let reply;
     try {
-        reply = await ngx.fetch(url, {
-            headers: {
-                'Authorization': r.variables.s3auth,
-                'X-Amz-Security-Token': r.variables.awsSessionToken,
-                'Host': r.variables.s3_host
-            }
-        });
+        reply = await ngx.fetch(url, { headers });
     } catch (error) {
         r.error(`listing_json: failed to fetch S3 listing: ${error}`);
         return r.internalRedirect('@error404');
