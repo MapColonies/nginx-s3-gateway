@@ -1,4 +1,7 @@
 import s3gateway from "/etc/nginx/include/s3gateway.js";
+import utils from "/etc/nginx/include/utils.js";
+
+const FOUR_O_FOUR_ON_EMPTY_BUCKET = utils.parseBoolean(process.env['FOUR_O_FOUR_ON_EMPTY_BUCKET']);
 
 // XSLT is configured per-location at parse time, so the HTML/JSON choice must
 // happen before nginx picks a location, not inside a shared one.
@@ -24,6 +27,9 @@ async function serveDirectoryJson(r) {
         'X-Amz-Security-Token': r.variables.awsSessionToken,
         'Host': r.variables.s3_host
     };
+    if (r.variables.httpDate) {
+        headers['Date'] = r.variables.httpDate;
+    }
     if (r.variables.awsDate) {
         headers['x-amz-date'] = r.variables.awsDate;
     }
@@ -48,10 +54,14 @@ async function serveDirectoryJson(r) {
     }
 
     const xml = await reply.text();
-    const json = JSON.stringify(_parseListBucketResult(xml));
+    const result = _parseListBucketResult(xml);
+
+    if (FOUR_O_FOUR_ON_EMPTY_BUCKET && result.entries.length === 0) {
+        return r.internalRedirect('@error404');
+    }
 
     r.headersOut['Content-Type'] = 'application/json; charset=utf-8';
-    r.return(200, json);
+    r.return(200, JSON.stringify(result));
 }
 
 // Converts a ListBucketResult XML doc to { path, entries: [{ name, type, size, lastModified }] }.
