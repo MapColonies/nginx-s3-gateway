@@ -117,7 +117,8 @@ s3:
   # When true, a Helm hook job uploads readinessObject to the bucket automatically.
   # Requires write access to the bucket - leave false if credentials are read-only.
   seedReadinessObject: false
-  # Image for the seedReadinessObject hook job.
+  # Image for the seedReadinessObject hook job, mirrored into the private
+  # registry from Docker Hub's amazon/aws-cli.
   seedReadinessImage:
     repository: common/aws-cli
     tag: 2.17.62
