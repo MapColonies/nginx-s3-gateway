@@ -1,5 +1,6 @@
 js_import /etc/nginx/include/awscredentials.js;
 js_import /etc/nginx/include/s3gateway.js;
+js_import listing_json from /etc/nginx/listing_json.js;
 
 
 # We include only the variables needed for the authentication signatures that
@@ -253,7 +254,13 @@ server {
         include /etc/nginx/conf.d/gateway/s3listing_location.conf;
     }
 
+    # xslt_stylesheet is per-location at parse time, so format is picked here before
+    # nginx commits to @s3DirectoryHtml or @s3DirectoryJson.
     location @s3Directory {
+        js_content listing_json.dispatchDirectoryFormat;
+    }
+
+    location @s3DirectoryHtml {
         # We include only the headers needed for the authentication signatures that
         # we plan to use.
         include /etc/nginx/conf.d/gateway/v${AWS_SIGS_VERSION}_headers.conf;
@@ -287,7 +294,7 @@ server {
         # We strip off all of the AWS specific headers from the server so that
         # there is nothing identifying the object as having originated in an
         # object store.
-        js_header_filter s3gateway.editHeaders;
+        js_header_filter listing_json.htmlListingHeaders;
 
         # Apply XSL transformation to the XML returned from S3 directory listing
         # results such that we can output an HTML directory contents list.
@@ -312,6 +319,17 @@ server {
 
         proxy_pass  ${S3_SERVER_PROTO}://storage_urls$s3Uri;
         include /etc/nginx/conf.d/gateway/s3listing_location.conf;
+    }
+
+    # Same listing, rendered as JSON for "Accept: application/json" (axios's default).
+    # Not cached (js_content doesn't go through proxy_cache) - every request hits S3 live.
+    location @s3DirectoryJson {
+        set $forIndexPage false;
+
+        include /etc/nginx/conf.d/gateway/cors.conf;
+        include /etc/nginx/conf.d/gateway/js_fetch_trusted_certificate.conf;
+
+        js_content listing_json.serveDirectoryJson;
     }
 
     location ~ /index.html$ {

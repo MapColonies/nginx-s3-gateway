@@ -1,0 +1,63 @@
+{{- if and .Values.enabled .Values.s3.seedReadinessObject -}}
+{{- $releaseName := .Release.Name -}}
+{{- $chartName := include "nginx-s3-gateway.name" . -}}
+{{- $cloudProviderDockerRegistryUrl := include "nginx-s3-gateway.cloudProviderDockerRegistryUrl" . -}}
+{{- $cloudProviderImagePullSecretName := include "nginx-s3-gateway.cloudProviderImagePullSecretName" . -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $releaseName }}-{{ $chartName }}-seed-readiness
+  labels:
+    app: {{ $chartName }}
+    release: {{ $releaseName }}
+    {{- include "nginx-s3-gateway.labels" . | nindent 4 }}
+  annotations:
+    # post-install/post-upgrade, not pre-*: needs the release's own ConfigMap/Secret already applied.
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: {{ $chartName }}
+        release: {{ $releaseName }}
+        {{- include "nginx-s3-gateway.labels" . | nindent 8 }}
+    spec:
+      {{- if $cloudProviderImagePullSecretName }}
+      imagePullSecrets:
+        - name: {{ $cloudProviderImagePullSecretName | quote }}
+      {{- end }}
+      restartPolicy: Never
+      containers:
+        - name: seed-readiness-object
+          image: {{ $cloudProviderDockerRegistryUrl }}{{ .Values.s3.seedReadinessImage.repository }}:{{ .Values.s3.seedReadinessImage.tag }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              echo ok | aws --endpoint-url="${S3_SERVER_PROTO}://${S3_SERVER}:${S3_SERVER_PORT}" \
+                s3 cp - "s3://${S3_BUCKET_NAME}/${READINESS_OBJECT}"
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "nginx-s3-gateway.secretName" . }}
+                  key: accessKeyId
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "nginx-s3-gateway.secretName" . }}
+                  key: secretAccessKey
+            - name: AWS_DEFAULT_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ $releaseName }}-{{ $chartName }}-configmap
+                  key: S3_REGION
+            - name: READINESS_OBJECT
+              value: {{ .Values.s3.readinessObject | default "liveness.txt" | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ $releaseName }}-{{ $chartName }}-configmap
+{{- end }}
