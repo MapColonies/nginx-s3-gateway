@@ -322,8 +322,7 @@ server {
     }
 
     # Same listing, rendered as JSON for "Accept: application/json" (axios's default).
-    # FOUR_O_FOUR_ON_EMPTY_BUCKET isn't honored here - empty dir returns 200, empty entries.
-    # Also not cached (js_content doesn't go through proxy_cache) - every request hits S3 live.
+    # Not cached (js_content doesn't go through proxy_cache) - every request hits S3 live.
     location @s3DirectoryJson {
         set $forIndexPage false;
 

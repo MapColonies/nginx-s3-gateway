@@ -2,7 +2,7 @@ global:
   cloudProvider: {}
   tracing: {}
   metrics: {}
-  allowDirectoryList: true
+  allowDirectoryList: false
   storage:
     s3:
       secretName: ""
@@ -115,7 +115,12 @@ s3:
   # Object HEADed by the readiness probe to verify S3 reachability. Must exist in the bucket.
   readinessObject: liveness.txt
   # When true, a Helm hook job uploads readinessObject to the bucket automatically.
-  seedReadinessObject: true
+  # Requires write access to the bucket - leave false if credentials are read-only.
+  seedReadinessObject: false
+  # Image for the seedReadinessObject hook job.
+  seedReadinessImage:
+    repository: common/aws-cli
+    tag: 2.17.62
   appendSlashForPossibleDirectory: true
   # customServerConf:
   # customLocationConf:
