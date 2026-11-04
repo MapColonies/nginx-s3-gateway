@@ -1,5 +1,6 @@
 js_import /etc/nginx/include/awscredentials.js;
 js_import /etc/nginx/include/s3gateway.js;
+js_import listing_json from /etc/nginx/listing_json.js;
 
 
 # We include only the variables needed for the authentication signatures that
@@ -30,6 +31,8 @@ js_var $forIndexPage true;
 js_set $s3auth s3gateway.s3auth;
 js_set $awsSessionToken awscredentials.sessionToken;
 js_set $s3uri s3gateway.s3uri;
+js_set $s3_listing_uri listing_json.listingUri;
+js_set $s3_listing_auth listing_json.listingAuth;
 
 server {
     listen 8080;
@@ -253,7 +256,13 @@ server {
         include /etc/nginx/conf.d/gateway/s3listing_location.conf;
     }
 
+    # xslt_stylesheet is per-location at parse time, so format is picked here before
+    # nginx commits to @s3DirectoryHtml or @s3DirectoryJson.
     location @s3Directory {
+        js_content listing_json.dispatchDirectoryFormat;
+    }
+
+    location @s3DirectoryHtml {
         # We include only the headers needed for the authentication signatures that
         # we plan to use.
         include /etc/nginx/conf.d/gateway/v${AWS_SIGS_VERSION}_headers.conf;
@@ -287,7 +296,7 @@ server {
         # We strip off all of the AWS specific headers from the server so that
         # there is nothing identifying the object as having originated in an
         # object store.
-        js_header_filter s3gateway.editHeaders;
+        js_header_filter listing_json.htmlListingHeaders;
 
         # Apply XSL transformation to the XML returned from S3 directory listing
         # results such that we can output an HTML directory contents list.
@@ -312,6 +321,57 @@ server {
 
         proxy_pass  ${S3_SERVER_PROTO}://storage_urls$s3Uri;
         include /etc/nginx/conf.d/gateway/s3listing_location.conf;
+    }
+
+    # Same listing, rendered as JSON for "Accept: application/json" (axios's default).
+    # Cached via the /_s3_listing subrequest, keyed on the listing query so each
+    # page gets its own entry.
+    location @s3DirectoryJson {
+        set $forIndexPage false;
+
+        include /etc/nginx/conf.d/gateway/cors.conf;
+
+        js_content listing_json.serveDirectoryJson;
+    }
+
+    # The XML listing, fetched through the proxy pipeline so proxy_cache applies.
+    # Reached only via subrequest from listing_json.serveDirectoryJson; ngx.fetch
+    # would open a raw client socket and bypass the cache entirely. The auth header
+    # is re-signed here from this subrequest's own $args, so the signed and the sent
+    # query strings cannot drift apart.
+    location /_s3_listing {
+        internal;
+
+        # r.subrequest() buffers the whole upstream body in memory and the
+        # default buffer is one page. A full 1000-key ListObjectsV2 response is
+        # ~200KB, and approaches ~1.2MB when keys near S3's 1024-byte limit, so
+        # the buffer must cover a worst-case page or the listing dies with
+        # "too big subrequest response". nginx reads this from the subrequest's
+        # own location, not from the location that issued it. This is the memory
+        # cost of caching the listing - ngx.fetch had no cap but no cache either.
+        subrequest_output_buffer_size 2m;
+
+        proxy_cache s3_cache;
+        proxy_cache_valid 200 ${PROXY_CACHE_VALID_OK};
+        proxy_cache_valid 400 403 404 ${PROXY_CACHE_VALID_NOTFOUND};
+        # $args carries the full canonical listing query - page 2 must not share
+        # page 1's entry. The literal prefix keeps these XML bodies in their own
+        # keyspace, away from the object entries keyed "$request_method$host$uri".
+        proxy_cache_key "listing:$host$uri$args";
+
+        include /etc/nginx/conf.d/gateway/v${AWS_SIGS_VERSION}_headers.conf;
+        proxy_pass_request_headers off;
+        proxy_ssl_server_name on;
+        proxy_ssl_name ${S3_SERVER};
+
+        proxy_set_header Authorization $s3_listing_auth;
+        proxy_set_header X-Amz-Security-Token $awsSessionToken;
+        # Without this nginx sends the upstream block's name ("storage_urls") as
+        # Host, which S3 rejects with InvalidRequest "invalid hostname" - and it
+        # is also the host the signature was computed over, so the two must match.
+        proxy_set_header Host $s3_host;
+        proxy_set_header Connection '';
+        proxy_pass ${S3_SERVER_PROTO}://storage_urls$s3_listing_uri?$args;
     }
 
     location ~ /index.html$ {

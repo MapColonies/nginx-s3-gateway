@@ -134,3 +134,7 @@ dist
 
 # Local design specs (superpowers) — not part of the repo
 docs/superpowers/
+.idea/
+
+# Local deploy scripts with hardcoded environment-specific values — not part of the repo
+scripts/*.local.sh

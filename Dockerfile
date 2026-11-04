@@ -34,6 +34,9 @@ ENV DIRECTORY_LISTING_PATH_PREFIX= \
 # Gateway-specific OPA/JWT auth extension
 COPY nginx-config/opa_auth.js /etc/nginx/
 
+# Gateway-specific JSON directory listing extension
+COPY nginx-config/listing_json.js /etc/nginx/
+
 RUN chmod +x /docker-entrypoint.sh && \
     chmod -R g+rwX /etc/nginx /var/cache/nginx /docker-entrypoint.d /docker-entrypoint.sh
 

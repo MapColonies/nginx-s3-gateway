@@ -114,6 +114,20 @@ s3:
   cacheValidForbidden: 30s
   # Object HEADed by the readiness probe to verify S3 reachability. Must exist in the bucket.
   readinessObject: liveness.txt
+  # When true, a Helm hook job uploads readinessObject to the bucket automatically.
+  # Requires write access to the bucket - leave false if credentials are read-only.
+  seedReadinessObject: false
+  # Image for the seedReadinessObject hook job, mirrored into the private
+  # registry from Docker Hub's amazon/aws-cli.
+  seedReadinessImage:
+    repository: common/aws-cli
+    tag: 2.17.62
+  appendSlashForPossibleDirectory: true
+  # Entries per page in the JSON directory listing (Accept: application/json).
+  # S3 caps this at 1000 and uses 1000 when unset, so 1000 is the default and the
+  # ceiling; out-of-range or non-numeric values fall back to 1000. Lowering it
+  # shrinks the worst-case listing body that the subrequest has to buffer.
+  listingMaxKeys: 1000
   # customServerConf:
   # customLocationConf:
   # sigsVersion: 4
