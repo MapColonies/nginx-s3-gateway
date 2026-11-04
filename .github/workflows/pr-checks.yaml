@@ -1,0 +1,21 @@
+name: PR checks
+
+on:
+  pull_request:
+    branches: [master]
+
+jobs:
+  example-config-drift:
+    name: example/ config is in sync with helm/config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Install PyYAML
+        run: pip install pyyaml
+      - name: Check rendered example config
+        run: ./scripts/render-example-config.sh --check
+
+  # scripts/test-njs.sh is deliberately not run here yet: it pulls the gateway
+  # base image from the private ACR, and secrets are unavailable to pull_request
+  # runs from forks. Wire it up once a CI-reachable image is settled.
