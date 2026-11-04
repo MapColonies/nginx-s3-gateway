@@ -93,5 +93,21 @@ check('above S3 ceiling is clamped', parseMaxKeys('5000'), 1000);
 check('valid value is honored', parseMaxKeys('250'), 250);
 check('ceiling value is honored', parseMaxKeys('1000'), 1000);
 
+const s3ErrorSummary = listing._test.s3ErrorSummary;
+
+const ERR_ARG = '<?xml version="1.0" encoding="UTF-8"?>\n<Error><Code>InvalidArgument</Code>' +
+    '<Message>Invalid Argument max-keys</Message><ArgumentName>max-keys</ArgumentName>' +
+    '<ArgumentValue>1000</ArgumentValue></Error>';
+check('extracts code, message and argument',
+    s3ErrorSummary(ERR_ARG),
+    'InvalidArgument: Invalid Argument max-keys [max-keys=1000]');
+
+const ERR_PLAIN = '<Error><Code>InvalidRequest</Code><Message>unsupported</Message></Error>';
+check('extracts code and message without argument',
+    s3ErrorSummary(ERR_PLAIN), 'InvalidRequest: unsupported');
+
+check('empty body is reported, not silently blank', s3ErrorSummary(''), '(empty body)');
+check('non-XML body falls back to a prefix', s3ErrorSummary('plain failure text'), 'plain failure text');
+
 console.log(failures ? `\n${failures} FAILED` : '\nall passed');
 if (failures) { throw new Error(`${failures} test(s) failed`); }

@@ -54,10 +54,12 @@ async function serveDirectoryJson(r) {
     }
 
     if (reply.status === 400) {
-        // Log S3's own error body: a 400 can be a bad continuation-token, but it
-        // can equally be a rejected parameter or header, and guessing in the
-        // message sends readers after the wrong cause.
-        r.error(`listing_json: S3 rejected the listing request (400): ${reply.responseText}`);
+        // Log S3's own <Code>/<Message> plus the query we sent. The raw body is
+        // not logged: nginx truncates long error lines, and the XML prolog alone
+        // fills the line before <Code> is reached. A 400 can be a bad
+        // continuation-token, but equally a rejected parameter or header, and
+        // guessing in the message sends readers after the wrong cause.
+        r.error(`listing_json: S3 rejected the listing: ${_s3ErrorSummary(reply.responseText)} | sent: ${query}`);
         const hadToken = !!(r.args && r.args['continuation-token']);
         return r.return(400, JSON.stringify({
             error: hadToken ? 'invalid continuation-token' : 'S3 rejected the listing request'
@@ -92,6 +94,26 @@ async function serveDirectoryJson(r) {
     r.headersOut['Content-Type'] = 'application/json; charset=utf-8';
     r.headersOut['Vary'] = 'Accept';
     r.return(200, JSON.stringify(result));
+}
+
+// Pulls <Code>/<Message> out of an S3 error body. nginx truncates long error
+// log lines, so the useful fields have to lead.
+function _s3ErrorSummary(body) {
+    if (!body) {
+        return '(empty body)';
+    }
+    const code = /<Code>([\s\S]*?)<\/Code>/.exec(body);
+    const message = /<Message>([\s\S]*?)<\/Message>/.exec(body);
+    const argName = /<ArgumentName>([\s\S]*?)<\/ArgumentName>/.exec(body);
+    const argValue = /<ArgumentValue>([\s\S]*?)<\/ArgumentValue>/.exec(body);
+    if (!code && !message) {
+        return body.substring(0, 200);
+    }
+    let out = `${code ? code[1] : '?'}: ${message ? message[1] : '?'}`;
+    if (argName) {
+        out += ` [${argName[1]}=${argValue ? argValue[1] : ''}]`;
+    }
+    return out;
 }
 
 // s3gateway.s3BaseUri is not exported by the base image, so re-derive it.
@@ -263,6 +285,7 @@ export default {
         decodeXmlEntities: _decodeXmlEntities,
         buildHref: _buildHref,
         buildListingQuery: _buildListingQuery,
-        parseMaxKeys: _parseMaxKeys
+        parseMaxKeys: _parseMaxKeys,
+        s3ErrorSummary: _s3ErrorSummary
     }
 };
