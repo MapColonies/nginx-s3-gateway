@@ -10,5 +10,6 @@ docker run --rm -v "${REPO_ROOT}":/work:ro \
   -e S3_SERVER_PROTO=https -e S3_REGION=us-east-1 -e S3_STYLE=virtual \
   -e AWS_SIGS_VERSION=4 -e ALLOW_DIRECTORY_LIST=true \
   -e S3_ACCESS_KEY_ID=test -e S3_SECRET_KEY=test \
+  -e S3_LISTING_MAX_KEYS=50 \
   -e PROVIDE_INDEX_PAGE=false -e APPEND_SLASH_FOR_POSSIBLE_DIRECTORY=false \
   --entrypoint njs "${IMAGE}" /work/nginx-config/listing_json.test.js

@@ -55,22 +55,43 @@ function req(uriPath, args) { return { variables: { uri_path: uriPath }, args: a
 
 check('root listing, no token',
     buildListingQuery(req('/')),
-    'delimiter=%2F&list-type=2');
+    'delimiter=%2F&list-type=2&max-keys=50');
 check('prefixed listing sorts after list-type',
     buildListingQuery(req('/dir1/')),
-    'delimiter=%2F&list-type=2&prefix=dir1%2F');
+    'delimiter=%2F&list-type=2&max-keys=50&prefix=dir1%2F');
 check('token sorts first',
     buildListingQuery(req('/dir1/', {'continuation-token': 'abc'})),
-    'continuation-token=abc&delimiter=%2F&list-type=2&prefix=dir1%2F');
+    'continuation-token=abc&delimiter=%2F&list-type=2&max-keys=50&prefix=dir1%2F');
 check('token with / + = is fully encoded',
     buildListingQuery(req('/', {'continuation-token': '1ueGcx/a+B=='})),
-    'continuation-token=1ueGcx%2Fa%2BB%3D%3D&delimiter=%2F&list-type=2');
+    'continuation-token=1ueGcx%2Fa%2BB%3D%3D&delimiter=%2F&list-type=2&max-keys=50');
 check('blank token is omitted, not sent empty',
     buildListingQuery(req('/', {'continuation-token': ''})),
-    'delimiter=%2F&list-type=2');
+    'delimiter=%2F&list-type=2&max-keys=50');
 check('prefix with space and ampersand',
     buildListingQuery(req('/a b&c/')),
-    'delimiter=%2F&list-type=2&prefix=a%20b%26c%2F');
+    'delimiter=%2F&list-type=2&max-keys=50&prefix=a%20b%26c%2F');
+
+check('max-keys sorts between list-type and prefix',
+    buildListingQuery(req('/dir1/')),
+    'delimiter=%2F&list-type=2&max-keys=50&prefix=dir1%2F');
+check('max-keys present on a root listing too',
+    buildListingQuery(req('/')),
+    'delimiter=%2F&list-type=2&max-keys=50');
+check('full sorted order with a token',
+    buildListingQuery(req('/dir1/', {'continuation-token': 'abc'})),
+    'continuation-token=abc&delimiter=%2F&list-type=2&max-keys=50&prefix=dir1%2F');
+
+const parseMaxKeys = listing._test.parseMaxKeys;
+
+check('unset falls back to S3 default', parseMaxKeys(undefined), 1000);
+check('empty string falls back', parseMaxKeys(''), 1000);
+check('garbage falls back', parseMaxKeys('abc'), 1000);
+check('zero falls back', parseMaxKeys('0'), 1000);
+check('negative falls back', parseMaxKeys('-5'), 1000);
+check('above S3 ceiling is clamped', parseMaxKeys('5000'), 1000);
+check('valid value is honored', parseMaxKeys('250'), 250);
+check('ceiling value is honored', parseMaxKeys('1000'), 1000);
 
 console.log(failures ? `\n${failures} FAILED` : '\nall passed');
 if (failures) { throw new Error(`${failures} test(s) failed`); }

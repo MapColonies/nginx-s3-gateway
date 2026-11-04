@@ -4,6 +4,18 @@ import awssig4 from "/etc/nginx/include/awssig4.js";
 import awscred from "/etc/nginx/include/awscredentials.js";
 
 const FOUR_O_FOUR_ON_EMPTY_BUCKET = utils.parseBoolean(process.env['FOUR_O_FOUR_ON_EMPTY_BUCKET']);
+// Entries per listing page. S3 caps max-keys at 1000 and uses 1000 when the
+// parameter is absent, so 1000 is both the default and the ceiling. Lowering it
+// shrinks the worst-case subrequest body (see subrequest_output_buffer_size).
+const LISTING_MAX_KEYS = _parseMaxKeys(process.env['S3_LISTING_MAX_KEYS']);
+
+function _parseMaxKeys(raw) {
+    const n = parseInt(raw, 10);
+    if (Number.isNaN(n) || n < 1) {
+        return 1000;
+    }
+    return n > 1000 ? 1000 : n;
+}
 
 // cors.conf's per-method `if` blocks each define their own add_header set, which under
 // nginx's add_header inheritance rule means a bare add_header at the location level never
@@ -128,6 +140,9 @@ function _buildListingQuery(r) {
 
     params.push('delimiter=%2F');
     params.push('list-type=2');
+    // sigv4 signs the query sorted by name; max-keys belongs between list-type
+    // and prefix. Moving it breaks every signature, not just the page size.
+    params.push('max-keys=' + LISTING_MAX_KEYS);
 
     const uriPath = r.variables.uri_path;
     if (uriPath !== '/') {
@@ -241,6 +256,7 @@ export default {
         parseListBucketResult: _parseListBucketResult,
         decodeXmlEntities: _decodeXmlEntities,
         buildHref: _buildHref,
-        buildListingQuery: _buildListingQuery
+        buildListingQuery: _buildListingQuery,
+        parseMaxKeys: _parseMaxKeys
     }
 };
