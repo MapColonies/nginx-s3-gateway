@@ -54,8 +54,14 @@ async function serveDirectoryJson(r) {
     }
 
     if (reply.status === 400) {
-        r.error('listing_json: S3 rejected the listing request (bad continuation-token?)');
-        return r.return(400, JSON.stringify({ error: 'invalid continuation-token' }));
+        // Log S3's own error body: a 400 can be a bad continuation-token, but it
+        // can equally be a rejected parameter or header, and guessing in the
+        // message sends readers after the wrong cause.
+        r.error(`listing_json: S3 rejected the listing request (400): ${reply.responseText}`);
+        const hadToken = !!(r.args && r.args['continuation-token']);
+        return r.return(400, JSON.stringify({
+            error: hadToken ? 'invalid continuation-token' : 'S3 rejected the listing request'
+        }));
     }
     if (reply.status === 403 || reply.status === 404) {
         return r.internalRedirect('@error404');
