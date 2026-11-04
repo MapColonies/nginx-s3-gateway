@@ -41,6 +41,8 @@ image:
 
 enabled: true
 initialDelaySeconds: 10
+additionalPodAnnotations: {}
+additionalDeploymentLabels: {}
 nodePort: 30030
 replicaCount: 1
 cloudProvider:
