@@ -74,6 +74,33 @@ async function serveDirectoryJson(r) {
     r.return(200, JSON.stringify(result));
 }
 
+// Builds the canonical ListObjectsV2 query string. sigv4 requires the
+// parameters sorted by name, and the string signed must be byte-identical to
+// the string sent - so this one function is the only place the query is built.
+// Sorted order: continuation-token, delimiter, list-type, prefix.
+function _buildListingQuery(r) {
+    const params = [];
+
+    const token = (r.args && r.args['continuation-token']) || '';
+    if (token) {
+        params.push('continuation-token=' + s3gateway._encodeURIComponent(token));
+    }
+
+    params.push('delimiter=%2F');
+    params.push('list-type=2');
+
+    const uriPath = r.variables.uri_path;
+    if (uriPath !== '/') {
+        const decoded = decodeURIComponent(uriPath);
+        const withoutLeadingSlash = decoded.charAt(0) === '/' ? decoded.substring(1) : decoded;
+        if (withoutLeadingSlash) {
+            params.push('prefix=' + s3gateway._encodeURIComponent(withoutLeadingSlash));
+        }
+    }
+
+    return params.join('&');
+}
+
 // Converts a ListBucketResult XML doc to { path, entries: [{ name, type, size, lastModified }] }.
 function _parseListBucketResult(xml) {
     const rootPath = process.env['DIRECTORY_LISTING_PATH_PREFIX'] || '';
@@ -171,6 +198,7 @@ export default {
     _test: {
         parseListBucketResult: _parseListBucketResult,
         decodeXmlEntities: _decodeXmlEntities,
-        buildHref: _buildHref
+        buildHref: _buildHref,
+        buildListingQuery: _buildListingQuery
     }
 };

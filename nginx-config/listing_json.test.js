@@ -47,5 +47,30 @@ check('href encodes each segment', buildHref('', 'dir 1/a b.txt'), '/dir%201/a%2
 check('href keeps slashes', buildHref('', 'a/b/c'), '/a/b/c');
 check('href applies root prefix', buildHref('root/', 'a b'), '/root/a%20b');
 
+const buildListingQuery = listing._test.buildListingQuery;
+
+// Minimal stand-in for the nginx request object: buildListingQuery reads only
+// these two properties.
+function req(uriPath, args) { return { variables: { uri_path: uriPath }, args: args || {} }; }
+
+check('root listing, no token',
+    buildListingQuery(req('/')),
+    'delimiter=%2F&list-type=2');
+check('prefixed listing sorts after list-type',
+    buildListingQuery(req('/dir1/')),
+    'delimiter=%2F&list-type=2&prefix=dir1%2F');
+check('token sorts first',
+    buildListingQuery(req('/dir1/', {'continuation-token': 'abc'})),
+    'continuation-token=abc&delimiter=%2F&list-type=2&prefix=dir1%2F');
+check('token with / + = is fully encoded',
+    buildListingQuery(req('/', {'continuation-token': '1ueGcx/a+B=='})),
+    'continuation-token=1ueGcx%2Fa%2BB%3D%3D&delimiter=%2F&list-type=2');
+check('blank token is omitted, not sent empty',
+    buildListingQuery(req('/', {'continuation-token': ''})),
+    'delimiter=%2F&list-type=2');
+check('prefix with space and ampersand',
+    buildListingQuery(req('/a b&c/')),
+    'delimiter=%2F&list-type=2&prefix=a%20b%26c%2F');
+
 console.log(failures ? `\n${failures} FAILED` : '\nall passed');
 if (failures) { throw new Error(`${failures} test(s) failed`); }
