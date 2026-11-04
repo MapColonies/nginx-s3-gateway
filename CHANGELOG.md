@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.0.1](https://github.com/MapColonies/nginx-s3-gateway/compare/v7.0.0...v7.0.1) (2026-11-04)
+
+
+### Helm Changes
+
+* add additionalPodAnnotations support (MAPCO-12099) ([#43](https://github.com/MapColonies/nginx-s3-gateway/issues/43)) ([4671d78](https://github.com/MapColonies/nginx-s3-gateway/commit/4671d7850c9fbf17230a39683cc926a7a8253b3b))
+
 ## [7.0.0](https://github.com/MapColonies/nginx-s3-gateway/compare/v6.0.0...v7.0.0) (2026-10-20)
 
 
