@@ -339,6 +339,12 @@ server {
         proxy_ssl_name ${S3_SERVER};
 
         proxy_set_header Authorization $s3_listing_auth;
+        proxy_set_header X-Amz-Security-Token $awsSessionToken;
+        # Without this nginx sends the upstream block's name ("storage_urls") as
+        # Host, which S3 rejects with InvalidRequest "invalid hostname" - and it
+        # is also the host the signature was computed over, so the two must match.
+        proxy_set_header Host $s3_host;
+        proxy_set_header Connection '';
         proxy_pass ${S3_SERVER_PROTO}://storage_urls$s3_listing_uri?$args;
     }
 
