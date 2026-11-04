@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Runs nginx-config/*.test.js under the njs interpreter from the gateway base
+# image - the only place /etc/nginx/include/s3gateway.js exists.
+set -euo pipefail
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+IMAGE="${NGINX_S3_GATEWAY_IMAGE:-acrarolibotnonprod.azurecr.io/common/nginx-s3-gateway:v7.0.0}"
+
+docker run --rm -v "${REPO_ROOT}":/work:ro \
+  -e S3_BUCKET_NAME=test-bucket -e S3_SERVER=s3.local -e S3_SERVER_PORT=443 \
+  -e S3_SERVER_PROTO=https -e S3_REGION=us-east-1 -e S3_STYLE=virtual \
+  -e AWS_SIGS_VERSION=4 -e ALLOW_DIRECTORY_LIST=true \
+  -e S3_ACCESS_KEY_ID=test -e S3_SECRET_KEY=test \
+  -e PROVIDE_INDEX_PAGE=false -e APPEND_SLASH_FOR_POSSIBLE_DIRECTORY=false \
+  --entrypoint njs "${IMAGE}" /work/nginx-config/listing_json.test.js

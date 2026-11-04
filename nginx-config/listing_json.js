@@ -165,5 +165,12 @@ function _decodeXmlEntities(value) {
 export default {
     dispatchDirectoryFormat,
     serveDirectoryJson,
-    htmlListingHeaders
+    htmlListingHeaders,
+    // Pure helpers, exported for nginx-config/listing_json.test.js only.
+    // Nothing in the nginx config references these.
+    _test: {
+        parseListBucketResult: _parseListBucketResult,
+        decodeXmlEntities: _decodeXmlEntities,
+        buildHref: _buildHref
+    }
 };
