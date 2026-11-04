@@ -14,10 +14,10 @@ metadata:
     component: {{ $chartName }}
     release: {{ $releaseName }}
     {{- include "nginx-s3-gateway.labels" . | nindent 4 }}
-  annotations:
-    {{- if .Values.additionalDeploymentAnnotations }}
-    {{- toYaml .Values.additionalDeploymentAnnotations | nindent 4 }}
+    {{- if .Values.additionalDeploymentLabels }}
+    {{- toYaml .Values.additionalDeploymentLabels | nindent 4 }}
     {{- end }}
+  annotations:
     collectord.io/index: {{ quote .Values.splunkIndex }}
 spec:
   replicas: {{ .Values.replicaCount }}
