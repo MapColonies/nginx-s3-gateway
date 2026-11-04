@@ -25,34 +25,17 @@ function _wantsJson(r) {
     return accept.toLowerCase().indexOf('application/json') !== -1;
 }
 
-// Fetches the listing XML directly via ngx.fetch rather than proxy_pass + js_body_filter:
-// a body filter alone, with no XSLT also on the location, doesn't reliably get the body here.
+// Fetches the listing XML through an internal proxied location rather than
+// ngx.fetch: ngx.fetch opens a raw client socket and bypasses proxy_cache, so a
+// subrequest is what makes the listing cacheable. A js_body_filter on the
+// location would not work here - with no XSLT alongside it, it doesn't reliably
+// get the body.
 async function serveDirectoryJson(r) {
-    const proto = process.env['S3_SERVER_PROTO'];
-    const server = process.env['S3_SERVER'];
-    const port = process.env['S3_SERVER_PORT'];
     const query = _buildListingQuery(r);
-    const baseUri = _s3BaseUri();
-    const url = `${proto}://${server}:${port}${baseUri.length > 0 ? baseUri : '/'}?${query}`;
-
-    const headers = {
-        'Authorization': _signListingQuery(r, query),
-        'X-Amz-Security-Token': r.variables.awsSessionToken,
-        'Host': r.variables.s3_host
-    };
-    if (r.variables.httpDate) {
-        headers['Date'] = r.variables.httpDate;
-    }
-    if (r.variables.awsDate) {
-        headers['x-amz-date'] = r.variables.awsDate;
-    }
-    if (r.variables.awsPayloadHash) {
-        headers['x-amz-content-sha256'] = r.variables.awsPayloadHash;
-    }
 
     let reply;
     try {
-        reply = await ngx.fetch(url, { headers });
+        reply = await r.subrequest('/_s3_listing', { args: query });
     } catch (error) {
         r.error(`listing_json: failed to fetch S3 listing: ${error}`);
         return r.internalRedirect('@error404');
@@ -78,7 +61,7 @@ async function serveDirectoryJson(r) {
         return r.internalRedirect('@error404');
     }
 
-    const xml = await reply.text();
+    const xml = reply.responseText;
     const result = _parseListBucketResult(xml);
 
     // Only a first page may 404 on empty: the last page of an exactly-N*1000-key
@@ -109,11 +92,26 @@ function _signListingQuery(r, queryParams) {
         throw new Error('listing_json: JSON listing pagination requires AWS_SIGS_VERSION=4, got ' +
             process.env['AWS_SIGS_VERSION']);
     }
-    const baseUri = _s3BaseUri();
     return awssig4.signatureV4(
         r, awscred.Now(), process.env['S3_REGION'], 's3',
-        baseUri.length > 0 ? baseUri : '/', queryParams,
+        listingUri(r), queryParams,
         r.variables.s3_host, awscred.readCredentials(r));
+}
+
+// js_set handler for $s3_listing_uri: the S3 path the listing is addressed to.
+// Path style puts the bucket here (GET /bucket?list-type=2); virtual-host style
+// uses "/". Must return exactly what _signListingQuery signs, or the request is
+// signed for one path and sent to another.
+function listingUri(r) {
+    const baseUri = _s3BaseUri();
+    return baseUri.length > 0 ? baseUri : '/';
+}
+
+// js_set handler for $s3_listing_auth. Runs on the /_s3_listing subrequest and
+// signs that subrequest's own $args - which serveDirectoryJson set from
+// _buildListingQuery - so the signed string is the sent string by construction.
+function listingAuth(r) {
+    return _signListingQuery(r, r.variables.args || '');
 }
 
 // Builds the canonical ListObjectsV2 query string. sigv4 requires the
@@ -235,6 +233,8 @@ export default {
     dispatchDirectoryFormat,
     serveDirectoryJson,
     htmlListingHeaders,
+    listingAuth,
+    listingUri,
     // Pure helpers, exported for nginx-config/listing_json.test.js only.
     // Nothing in the nginx config references these.
     _test: {
