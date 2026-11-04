@@ -1,5 +1,7 @@
 import s3gateway from "/etc/nginx/include/s3gateway.js";
 import utils from "/etc/nginx/include/utils.js";
+import awssig4 from "/etc/nginx/include/awssig4.js";
+import awscred from "/etc/nginx/include/awscredentials.js";
 
 const FOUR_O_FOUR_ON_EMPTY_BUCKET = utils.parseBoolean(process.env['FOUR_O_FOUR_ON_EMPTY_BUCKET']);
 
@@ -29,10 +31,12 @@ async function serveDirectoryJson(r) {
     const proto = process.env['S3_SERVER_PROTO'];
     const server = process.env['S3_SERVER'];
     const port = process.env['S3_SERVER_PORT'];
-    const url = `${proto}://${server}:${port}${s3gateway.s3uri(r)}`;
+    const query = _buildListingQuery(r);
+    const baseUri = _s3BaseUri();
+    const url = `${proto}://${server}:${port}${baseUri.length > 0 ? baseUri : '/'}?${query}`;
 
     const headers = {
-        'Authorization': r.variables.s3auth,
+        'Authorization': _signListingQuery(r, query),
         'X-Amz-Security-Token': r.variables.awsSessionToken,
         'Host': r.variables.s3_host
     };
@@ -54,8 +58,20 @@ async function serveDirectoryJson(r) {
         return r.internalRedirect('@error404');
     }
 
+    if (reply.status === 400) {
+        r.error('listing_json: S3 rejected the listing request (bad continuation-token?)');
+        return r.return(400, JSON.stringify({ error: 'invalid continuation-token' }));
+    }
     if (reply.status === 403 || reply.status === 404) {
         return r.internalRedirect('@error404');
+    }
+    // An upstream failure is not a missing directory - reporting 404 here would
+    // tell a client the folder is gone when S3 is merely broken or unreachable.
+    // (LocalStack answers 500 for a malformed continuation-token where real S3
+    // answers 400, so both paths have to be non-404.)
+    if (reply.status >= 500) {
+        r.error(`listing_json: S3 returned ${reply.status} fetching listing`);
+        return r.return(502, JSON.stringify({ error: 'upstream listing request failed' }));
     }
     if (reply.status !== 200) {
         r.error(`listing_json: unexpected status ${reply.status} fetching S3 listing`);
@@ -65,13 +81,39 @@ async function serveDirectoryJson(r) {
     const xml = await reply.text();
     const result = _parseListBucketResult(xml);
 
-    if (FOUR_O_FOUR_ON_EMPTY_BUCKET && result.entries.length === 0) {
+    // Only a first page may 404 on empty: the last page of an exactly-N*1000-key
+    // directory is legitimately empty, and 404ing it breaks a paging client mid-walk.
+    const isFirstPage = !(r.args && r.args['continuation-token']);
+    if (FOUR_O_FOUR_ON_EMPTY_BUCKET && isFirstPage && result.entries.length === 0) {
         return r.internalRedirect('@error404');
     }
 
     r.headersOut['Content-Type'] = 'application/json; charset=utf-8';
     r.headersOut['Vary'] = 'Accept';
     r.return(200, JSON.stringify(result));
+}
+
+// s3gateway.s3BaseUri is not exported by the base image, so re-derive it.
+// Must stay identical to upstream's s3BaseUri: path style prefixes the bucket,
+// virtual-host style uses the empty string.
+function _s3BaseUri() {
+    return process.env['S3_STYLE'] === 'path' ? '/' + process.env['S3_BUCKET_NAME'] : '';
+}
+
+// Signs the listing query with the base image's own sigv4 implementation.
+// Upstream's $s3auth cannot be reused: _s3ReqParamsForSigV4 derives its
+// queryParams from _s3DirQueryParams, which emits only delimiter/prefix and
+// never reads r.args - so a continuation-token would be sent but not signed.
+function _signListingQuery(r, queryParams) {
+    if (process.env['AWS_SIGS_VERSION'] !== '4') {
+        throw new Error('listing_json: JSON listing pagination requires AWS_SIGS_VERSION=4, got ' +
+            process.env['AWS_SIGS_VERSION']);
+    }
+    const baseUri = _s3BaseUri();
+    return awssig4.signatureV4(
+        r, awscred.Now(), process.env['S3_REGION'], 's3',
+        baseUri.length > 0 ? baseUri : '/', queryParams,
+        r.variables.s3_host, awscred.readCredentials(r));
 }
 
 // Builds the canonical ListObjectsV2 query string. sigv4 requires the
