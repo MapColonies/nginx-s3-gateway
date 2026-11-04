@@ -4,6 +4,9 @@ on:
   pull_request:
     branches: [master]
 
+env:
+  HELM_EXPERIMENTAL_OCI: 1
+
 jobs:
   example-config-drift:
     name: example/ config is in sync with helm/config
@@ -11,8 +14,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
+
       - name: Install PyYAML
         run: pip install pyyaml
+
+      # render-example-config.sh runs `helm dependency build`, and helm/Chart.yaml
+      # declares mclabels from the private ACR. helm refuses to render while any
+      # declared dependency is missing from charts/ - even though the template we
+      # render (custom-configmap.yaml) never uses mclabels - so the check cannot
+      # run without a registry login. Fork PRs get no secrets and will fail here.
+      - name: Log in to ACR for the mclabels chart dependency
+        run: |
+          helm registry login "${{ secrets.ACR_URL }}" \
+            --username "${{ secrets.ACR_PUSH_USER }}" \
+            --password "${{ secrets.ACR_PUSH_TOKEN }}"
+
       - name: Check rendered example config
         run: ./scripts/render-example-config.sh --check
 
