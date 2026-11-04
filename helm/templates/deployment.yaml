@@ -32,6 +32,9 @@ spec:
         run: {{ $releaseName }}-{{ $chartName }}
         {{- include "nginx-s3-gateway.selectorLabels" . | nindent 8 }}
       annotations:
+        {{- if .Values.additionalPodAnnotations }}
+        {{- toYaml .Values.additionalPodAnnotations | nindent 8 }}
+        {{- end }}
         {{ include "mclabels.annotations" . | nindent 8 }}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         checksum/custom-config: {{ include (print $.Template.BasePath "/custom-configmap.yaml") . | sha256sum }}
