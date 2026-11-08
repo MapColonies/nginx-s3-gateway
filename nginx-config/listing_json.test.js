@@ -109,5 +109,28 @@ check('extracts code and message without argument',
 check('empty body is reported, not silently blank', s3ErrorSummary(''), '(empty body)');
 check('non-XML body falls back to a prefix', s3ErrorSummary('plain failure text'), 'plain failure text');
 
+// S3 echoes the rejected header's value back, so a complaint about Authorization
+// carries the access key ID and signature. It must never reach the error log.
+const ERR_AUTH = '<Error><Code>InvalidArgument</Code><Message>Invalid Argument</Message>' +
+    '<ArgumentName>Authorization</ArgumentName>' +
+    '<ArgumentValue>AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20260101/us-east-1/s3/aws4_request, ' +
+    'Signature=deadbeef</ArgumentValue></Error>';
+check('Authorization value is redacted',
+    s3ErrorSummary(ERR_AUTH),
+    'InvalidArgument: Invalid Argument [Authorization=(redacted)]');
+
+const ERR_TOKEN = '<Error><Code>InvalidArgument</Code><Message>Invalid Argument</Message>' +
+    '<ArgumentName>x-amz-security-token</ArgumentName>' +
+    '<ArgumentValue>FwoGZXIvYXdzEBYaD...</ArgumentValue></Error>';
+check('x-amz-* value is redacted',
+    s3ErrorSummary(ERR_TOKEN),
+    'InvalidArgument: Invalid Argument [x-amz-security-token=(redacted)]');
+
+const ERR_MIXED_CASE = '<Error><Code>InvalidArgument</Code><Message>Invalid Argument</Message>' +
+    '<ArgumentName>X-Amz-Date</ArgumentName><ArgumentValue>20260101T000000Z</ArgumentValue></Error>';
+check('redaction is case-insensitive',
+    s3ErrorSummary(ERR_MIXED_CASE),
+    'InvalidArgument: Invalid Argument [X-Amz-Date=(redacted)]');
+
 console.log(failures ? `\n${failures} FAILED` : '\nall passed');
 if (failures) { throw new Error(`${failures} test(s) failed`); }

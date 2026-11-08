@@ -111,9 +111,22 @@ function _s3ErrorSummary(body) {
     }
     let out = `${code ? code[1] : '?'}: ${message ? message[1] : '?'}`;
     if (argName) {
-        out += ` [${argName[1]}=${argValue ? argValue[1] : ''}]`;
+        const name = argName[1];
+        // S3 echoes the rejected header back in <ArgumentValue>. For Authorization
+        // that is the access key ID and the request signature, and x-amz-security-token
+        // is a session credential - neither belongs in the error log. The name alone
+        // is what identifies which header S3 objected to.
+        const value = _isSensitiveArgument(name)
+            ? '(redacted)'
+            : (argValue ? argValue[1] : '');
+        out += ` [${name}=${value}]`;
     }
     return out;
+}
+
+function _isSensitiveArgument(name) {
+    const lower = name.toLowerCase();
+    return lower === 'authorization' || lower.indexOf('x-amz-') === 0;
 }
 
 // s3gateway.s3BaseUri is not exported by the base image, so re-derive it.
