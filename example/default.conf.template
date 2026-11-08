@@ -313,7 +313,10 @@ server {
     # would open a raw client socket and bypass the cache entirely. The auth header
     # is re-signed here from this subrequest's own $args, so the signed and the sent
     # query strings cannot drift apart.
-    location /_s3_listing {
+    # Exact match, not a prefix: `location /_s3_listing` would also swallow any
+    # object key starting with that string (e.g. /_s3_listing_report.csv) and
+    # 404 it, since the location is internal. Same reason as `= /_combined_auth`.
+    location = /_s3_listing {
         internal;
 
         # r.subrequest() buffers the whole upstream body in memory and the
@@ -327,7 +330,11 @@ server {
 
         proxy_cache s3_cache;
         proxy_cache_valid 200 ${PROXY_CACHE_VALID_OK};
-        proxy_cache_valid 400 403 404 ${PROXY_CACHE_VALID_NOTFOUND};
+        proxy_cache_valid 400 404 ${PROXY_CACHE_VALID_NOTFOUND};
+        # nginx matches the first proxy_cache_valid entry for a status, so 403 has
+        # to be off the line above to pick up the shorter forbidden TTL used at the
+        # server level - a credential or clock problem must not be held for 1m.
+        proxy_cache_valid 403 ${PROXY_CACHE_VALID_FORBIDDEN};
         # $args carries the full canonical listing query - page 2 must not share
         # page 1's entry. The literal prefix keeps these XML bodies in their own
         # keyspace, away from the object entries keyed "$request_method$host$uri".
@@ -344,6 +351,11 @@ server {
         # Host, which S3 rejects with InvalidRequest "invalid hostname" - and it
         # is also the host the signature was computed over, so the two must match.
         proxy_set_header Host $s3_host;
+
+        # Use keep alive connections in order to improve performance.
+        # Connection '' is inert without this - nginx would speak HTTP/1.0 to S3
+        # and open a fresh TLS connection for every listing page.
+        proxy_http_version 1.1;
         proxy_set_header Connection '';
         proxy_pass ${S3_SERVER_PROTO}://storage_urls$s3_listing_uri?$args;
     }
