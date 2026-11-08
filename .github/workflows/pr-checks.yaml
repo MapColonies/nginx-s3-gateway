@@ -33,18 +33,29 @@ jobs:
       # helm refuses to render while a declared dependency is missing from
       # charts/ - even though the template we render (custom-configmap.yaml)
       # never uses mclabels - so the chart has to come from the private ACR
-      # first. Pull-only credentials: this job only reads a chart, it never
-      # pushes. Fork PRs get no secrets and will fail here.
+      # first. This job only reads a chart, so it wants pull-only credentials;
+      # it falls back to the push token until ACR_PULL_* secrets exist, because
+      # an empty username makes `helm registry login` prompt and die on EOF.
       #
-      # The logout matters: the next step runs a script from the PR branch, and
-      # it must not find a registry credential sitting on disk.
+      # The logout is what actually contains the credential: the next step runs
+      # a script from the PR branch, and must not find a login sitting on disk.
+      # That holds whichever of the two tokens was used.
       - name: Fetch the mclabels chart dependency
+        env:
+          ACR_URL: ${{ secrets.ACR_URL }}
+          ACR_USER: ${{ secrets.ACR_PULL_USER || secrets.ACR_PUSH_USER }}
+          ACR_TOKEN: ${{ secrets.ACR_PULL_TOKEN || secrets.ACR_PUSH_TOKEN }}
         run: |
-          helm registry login "${{ secrets.ACR_URL }}" \
-            --username "${{ secrets.ACR_PULL_USER }}" \
-            --password "${{ secrets.ACR_PULL_TOKEN }}"
+          if [ -z "$ACR_USER" ] || [ -z "$ACR_TOKEN" ]; then
+            echo "::error::No ACR credentials available. Fork PRs cannot run this check;" \
+                 "on a branch PR, set ACR_PULL_USER and ACR_PULL_TOKEN."
+            exit 1
+          fi
+          # --password-stdin keeps the token out of the process argument list.
+          printf '%s' "$ACR_TOKEN" | helm registry login "$ACR_URL" \
+            --username "$ACR_USER" --password-stdin
           helm dependency build ./helm
-          helm registry logout "${{ secrets.ACR_URL }}"
+          helm registry logout "$ACR_URL"
 
       - name: Check rendered example config
         env:
