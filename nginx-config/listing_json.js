@@ -170,7 +170,7 @@ function listingAuth(r) {
 // Builds the canonical ListObjectsV2 query string. sigv4 requires the
 // parameters sorted by name, and the string signed must be byte-identical to
 // the string sent - so this one function is the only place the query is built.
-// Sorted order: continuation-token, delimiter, list-type, prefix.
+// Sorted order: continuation-token, delimiter, list-type, max-keys, prefix.
 function _buildListingQuery(r) {
     const params = [];
 
