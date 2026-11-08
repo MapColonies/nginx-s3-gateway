@@ -22,8 +22,13 @@ if [[ "${SKIP_HELM_DEPENDENCY_BUILD:-}" != "1" ]]; then
   helm dependency build "${REPO_ROOT}/helm" >/dev/null
 fi
 
+# image.tag is pinned to a placeholder instead of defaulting to v$Chart.AppVersion.
+# log_format.conf embeds it as service.version, so without this every release
+# bump re-renders example/ and the --check below fails on a version change that
+# has nothing to do with the nginx config this script exists to keep in sync.
 helm template render "${REPO_ROOT}/helm" \
   --set s3.nginxWorkerProcesses=4 \
+  --set image.tag=v0.0.0-example \
   --show-only templates/custom-configmap.yaml \
   > "${TMP_DIR}/configmap.yaml"
 
