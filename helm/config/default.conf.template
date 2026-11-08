@@ -20,6 +20,16 @@ map $uri_full_path $uri_path {
     default $PREFIX_LEADING_DIRECTORY_PATH$uri_full_path;
 }
 
+# Behind a TLS-terminating proxy (e.g. an OpenShift Route) $scheme is the
+# scheme of the plain-HTTP connection nginx itself sees, not the client's -
+# building a redirect from it sends the client to http://, which such a proxy
+# then bounces straight back to https://, looping. Prefer the proxy's own
+# X-Forwarded-Proto when present.
+map $http_x_forwarded_proto $external_scheme {
+    default $http_x_forwarded_proto;
+    ''      $scheme;
+}
+
 # S3_HOST_HEADER is set in the startup script
 # (either ./common/docker-entrypoint.sh or ./standalone_ubuntu_oss_install.sh)
 # based on the S3_STYLE configuration option.
@@ -453,7 +463,7 @@ server {
         # 302 to request without slashes
         # Adding a ? to the end of the replacement param in `rewrite` prevents it from
         # appending the query string.
-        rewrite ^ $scheme://$http_host$uri/$is_args$query_string? redirect;
+        rewrite ^ $external_scheme://$http_host$uri/$is_args$query_string? redirect;
     }
 
     # Provide a hint to the client on 405 errors of the acceptable request methods
