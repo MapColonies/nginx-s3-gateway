@@ -8,6 +8,18 @@ env:
   HELM_EXPERIMENTAL_OCI: 1
 
 jobs:
+  njs-unit-tests:
+    name: njs unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # scripts/test-njs.sh defaults to the public nginxinc/nginx-s3-gateway
+      # image - the same one Dockerfile stage 1 copies /etc/nginx/include from -
+      # so this needs no registry credentials and works on fork PRs.
+      - name: Run njs unit tests
+        run: ./scripts/test-njs.sh
+
   example-config-drift:
     name: example/ config is in sync with helm/config
     runs-on: ubuntu-latest
@@ -18,20 +30,23 @@ jobs:
       - name: Install PyYAML
         run: pip install pyyaml
 
-      # render-example-config.sh runs `helm dependency build`, and helm/Chart.yaml
-      # declares mclabels from the private ACR. helm refuses to render while any
-      # declared dependency is missing from charts/ - even though the template we
-      # render (custom-configmap.yaml) never uses mclabels - so the check cannot
-      # run without a registry login. Fork PRs get no secrets and will fail here.
-      - name: Log in to ACR for the mclabels chart dependency
+      # helm refuses to render while a declared dependency is missing from
+      # charts/ - even though the template we render (custom-configmap.yaml)
+      # never uses mclabels - so the chart has to come from the private ACR
+      # first. Pull-only credentials: this job only reads a chart, it never
+      # pushes. Fork PRs get no secrets and will fail here.
+      #
+      # The logout matters: the next step runs a script from the PR branch, and
+      # it must not find a registry credential sitting on disk.
+      - name: Fetch the mclabels chart dependency
         run: |
           helm registry login "${{ secrets.ACR_URL }}" \
-            --username "${{ secrets.ACR_PUSH_USER }}" \
-            --password "${{ secrets.ACR_PUSH_TOKEN }}"
+            --username "${{ secrets.ACR_PULL_USER }}" \
+            --password "${{ secrets.ACR_PULL_TOKEN }}"
+          helm dependency build ./helm
+          helm registry logout "${{ secrets.ACR_URL }}"
 
       - name: Check rendered example config
+        env:
+          SKIP_HELM_DEPENDENCY_BUILD: "1"
         run: ./scripts/render-example-config.sh --check
-
-  # scripts/test-njs.sh is deliberately not run here yet: it pulls the gateway
-  # base image from the private ACR, and secrets are unavailable to pull_request
-  # runs from forks. Wire it up once a CI-reachable image is settled.

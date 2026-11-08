@@ -16,7 +16,11 @@ CHECK=false
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-helm dependency build "${REPO_ROOT}/helm" >/dev/null
+# CI fetches the chart dependency itself so it can drop the registry credential
+# before running this script - see .github/workflows/pr-checks.yaml.
+if [[ "${SKIP_HELM_DEPENDENCY_BUILD:-}" != "1" ]]; then
+  helm dependency build "${REPO_ROOT}/helm" >/dev/null
+fi
 
 helm template render "${REPO_ROOT}/helm" \
   --set s3.nginxWorkerProcesses=4 \
