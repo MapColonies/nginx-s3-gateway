@@ -16,6 +16,7 @@ RUN apk add --no-cache bash && ln -sf /bin/bash /usr/bin/bash
 COPY --from=gateway-source /etc/nginx/include /etc/nginx/include
 COPY --from=gateway-source /etc/nginx/templates /etc/nginx/templates
 COPY --from=gateway-source /etc/nginx/conf.d /etc/nginx/conf.d
+COPY --from=gateway-source /etc/nginx/gateway_env_lib.sh /etc/nginx/gateway_env_lib.sh
 COPY --from=gateway-source /docker-entrypoint.d /docker-entrypoint.d
 
 # Use the gateway's own entrypoint
