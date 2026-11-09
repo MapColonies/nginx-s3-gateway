@@ -138,3 +138,8 @@ docs/superpowers/
 
 # Local deploy scripts with hardcoded environment-specific values — not part of the repo
 scripts/*.local.sh
+
+# Rendered from helm/config/*.template by scripts/render-example-config.sh
+example/nginx.conf
+example/default.conf.template
+example/log_format.conf

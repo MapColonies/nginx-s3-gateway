@@ -11,7 +11,14 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXAMPLE_DIR="${REPO_ROOT}/example"
 CHECK=false
-[[ "${1:-}" == "--check" ]] && CHECK=true
+if [[ $# -gt 0 ]]; then
+  if [[ "$1" == "--check" ]]; then
+    CHECK=true
+  else
+    echo "Usage: $0 [--check]" >&2
+    exit 1
+  fi
+fi
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT

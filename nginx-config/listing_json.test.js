@@ -1,27 +1,29 @@
 import listing from '/work/nginx-config/listing_json.js';
 
-// njs 0.9.6 does not support destructuring assignment - use direct property access.
-const parseListBucketResult = listing._test.parseListBucketResult;
-const decodeXmlEntities = listing._test.decodeXmlEntities;
-const buildHref = listing._test.buildHref;
+var parseXmlToJson = listing._test.parseXmlToJson;
+var buildHref = listing._test.buildHref;
+var wantsJson = listing._test.wantsJson;
 
-let failures = 0;
+var failures = 0;
 function check(name, actual, expected) {
-    const a = JSON.stringify(actual), e = JSON.stringify(expected);
-    if (a !== e) { failures++; console.log(`FAIL ${name}\n  expected ${e}\n  actual   ${a}`); }
-    else { console.log(`ok   ${name}`); }
+    var a = JSON.stringify(actual), e = JSON.stringify(expected);
+    if (a !== e) { failures++; console.log('FAIL ' + name + '\n  expected ' + e + '\n  actual   ' + a); }
+    else { console.log('ok   ' + name); }
 }
 
-const XML = `<?xml version="1.0" encoding="UTF-8"?>
-<ListBucketResult><Name>test-bucket</Name><Prefix>dir1/</Prefix>
-<IsTruncated>true</IsTruncated>
-<NextContinuationToken>1ueGcx/a+B==</NextContinuationToken>
-<CommonPrefixes><Prefix>dir1/sub &amp; more/</Prefix></CommonPrefixes>
-<Contents><Key>dir1/a b.txt</Key><Size>12</Size><LastModified>2026-01-01T00:00:00.000Z</LastModified></Contents>
-<Contents><Key>dir1/</Key><Size>0</Size><LastModified>2026-01-01T00:00:00.000Z</LastModified></Contents>
-</ListBucketResult>`;
+// --- parseXmlToJson ---
 
-const r = parseListBucketResult(XML);
+var XML = '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<ListBucketResult><Name>test-bucket</Name><Prefix>dir1/</Prefix>' +
+    '<Delimiter>/</Delimiter>' +
+    '<IsTruncated>true</IsTruncated>' +
+    '<NextMarker>dir1/zoo/</NextMarker>' +
+    '<CommonPrefixes><Prefix>dir1/sub &amp; more/</Prefix></CommonPrefixes>' +
+    '<Contents><Key>dir1/a b.txt</Key><Size>12</Size><LastModified>2026-01-01T00:00:00.000Z</LastModified></Contents>' +
+    '<Contents><Key>dir1/</Key><Size>0</Size><LastModified>2026-01-01T00:00:00.000Z</LastModified></Contents>' +
+    '</ListBucketResult>';
+
+var r = parseXmlToJson(XML);
 check('prefix becomes path', r.path, 'dir1/');
 check('self-prefix row dropped', r.entries.length, 2);
 check('dir name is relative, unslashed', r.entries[0].name, 'sub & more');
@@ -29,108 +31,65 @@ check('dir entry type', r.entries[0].type, 'directory');
 check('file name is relative', r.entries[1].name, 'a b.txt');
 check('file size parsed as number', r.entries[1].size, 12);
 check('truncated flag', r.truncated, true);
-check('continuation token decoded', r.nextContinuationToken, '1ueGcx/a+B==');
+check('nextMarker is prefix-stripped', r.nextMarker, 'zoo/');
 
-const EMPTY = '<ListBucketResult><Name>b</Name><Prefix/><IsTruncated>false</IsTruncated></ListBucketResult>';
-const e = parseListBucketResult(EMPTY);
+var EMPTY = '<ListBucketResult><Name>b</Name><Prefix/><IsTruncated>false</IsTruncated></ListBucketResult>';
+var e = parseXmlToJson(EMPTY);
 check('self-closed Prefix means root', e.path, '');
 check('no entries', e.entries.length, 0);
 check('not truncated', e.truncated, false);
-check('no token', e.nextContinuationToken, null);
+check('no marker', e.nextMarker, null);
 
-check('numeric entity', decodeXmlEntities('a&#65;b'), 'aAb');
-check('hex entity', decodeXmlEntities('a&#x41;b'), 'aAb');
-check('named entities', decodeXmlEntities('&lt;&amp;&gt;&quot;&apos;'), `<&>"'`);
-check('unknown entity left alone', decodeXmlEntities('&nope;'), '&nope;');
+// Multiple CommonPrefixes and Contents
+var MULTI = '<ListBucketResult><Prefix>p/</Prefix><IsTruncated>false</IsTruncated>' +
+    '<CommonPrefixes><Prefix>p/a/</Prefix></CommonPrefixes>' +
+    '<CommonPrefixes><Prefix>p/b/</Prefix></CommonPrefixes>' +
+    '<Contents><Key>p/x.txt</Key><Size>100</Size><LastModified>2026-06-01T00:00:00Z</LastModified></Contents>' +
+    '<Contents><Key>p/y.txt</Key><Size>200</Size><LastModified>2026-06-02T00:00:00Z</LastModified></Contents>' +
+    '</ListBucketResult>';
+var m = parseXmlToJson(MULTI);
+check('multi: 4 entries total', m.entries.length, 4);
+check('multi: first dir', m.entries[0].name, 'a');
+check('multi: second dir', m.entries[1].name, 'b');
+check('multi: first file', m.entries[2].name, 'x.txt');
+check('multi: second file', m.entries[3].name, 'y.txt');
+
+// XML entities in key names are decoded by xml.parse
+var ENTITIES = '<ListBucketResult><Prefix></Prefix><IsTruncated>false</IsTruncated>' +
+    '<Contents><Key>file &amp; "name".txt</Key><Size>1</Size><LastModified>2026-01-01T00:00:00Z</LastModified></Contents>' +
+    '</ListBucketResult>';
+var ent = parseXmlToJson(ENTITIES);
+check('xml entities decoded in key', ent.entries[0].name, 'file & "name".txt');
+
+// Backslash in key (not an XML entity — must pass through for valid JSON)
+var BACKSLASH = '<ListBucketResult><Prefix></Prefix><IsTruncated>false</IsTruncated>' +
+    '<Contents><Key>path\\to\\file.txt</Key><Size>1</Size><LastModified>2026-01-01T00:00:00Z</LastModified></Contents>' +
+    '</ListBucketResult>';
+var bs = parseXmlToJson(BACKSLASH);
+check('backslash preserved in key', bs.entries[0].name, 'path\\to\\file.txt');
+var bsJson = JSON.parse(JSON.stringify(bs));
+check('backslash survives JSON round-trip', bsJson.entries[0].name, 'path\\to\\file.txt');
+
+// --- buildHref ---
 
 check('href encodes each segment', buildHref('', 'dir 1/a b.txt'), '/dir%201/a%20b.txt');
 check('href keeps slashes', buildHref('', 'a/b/c'), '/a/b/c');
 check('href applies root prefix', buildHref('root/', 'a b'), '/root/a%20b');
+check('href with leading slash prefix does not double-slash', buildHref('/files', 'a/b'), '/files/a/b');
 
-const buildListingQuery = listing._test.buildListingQuery;
+// --- wantsJson ---
 
-// Minimal stand-in for the nginx request object: buildListingQuery reads only
-// these two properties.
-function req(uriPath, args) { return { variables: { uri_path: uriPath }, args: args || {} }; }
+function mockReq(accept) { return { headersIn: { 'Accept': accept } }; }
 
-check('root listing, no token',
-    buildListingQuery(req('/')),
-    'delimiter=%2F&list-type=2&max-keys=50');
-check('prefixed listing sorts after list-type',
-    buildListingQuery(req('/dir1/')),
-    'delimiter=%2F&list-type=2&max-keys=50&prefix=dir1%2F');
-check('token sorts first',
-    buildListingQuery(req('/dir1/', {'continuation-token': 'abc'})),
-    'continuation-token=abc&delimiter=%2F&list-type=2&max-keys=50&prefix=dir1%2F');
-check('token with / + = is fully encoded',
-    buildListingQuery(req('/', {'continuation-token': '1ueGcx/a+B=='})),
-    'continuation-token=1ueGcx%2Fa%2BB%3D%3D&delimiter=%2F&list-type=2&max-keys=50');
-check('blank token is omitted, not sent empty',
-    buildListingQuery(req('/', {'continuation-token': ''})),
-    'delimiter=%2F&list-type=2&max-keys=50');
-check('prefix with space and ampersand',
-    buildListingQuery(req('/a b&c/')),
-    'delimiter=%2F&list-type=2&max-keys=50&prefix=a%20b%26c%2F');
+check('exact application/json', wantsJson(mockReq('application/json')), true);
+check('json with charset', wantsJson(mockReq('application/json; charset=utf-8')), true);
+check('json among others', wantsJson(mockReq('text/html, application/json, */*')), true);
+check('no accept header', wantsJson({ headersIn: {} }), false);
+check('text/html only', wantsJson(mockReq('text/html')), false);
+check('q=0 rejects json', wantsJson(mockReq('application/json;q=0')), false);
+check('q=0.0 rejects json', wantsJson(mockReq('application/json; q=0.0')), false);
+check('q=0.5 accepts json', wantsJson(mockReq('application/json;q=0.5')), true);
+check('application/jsonx not matched', wantsJson(mockReq('application/jsonx')), false);
 
-check('max-keys sorts between list-type and prefix',
-    buildListingQuery(req('/dir1/')),
-    'delimiter=%2F&list-type=2&max-keys=50&prefix=dir1%2F');
-check('max-keys present on a root listing too',
-    buildListingQuery(req('/')),
-    'delimiter=%2F&list-type=2&max-keys=50');
-check('full sorted order with a token',
-    buildListingQuery(req('/dir1/', {'continuation-token': 'abc'})),
-    'continuation-token=abc&delimiter=%2F&list-type=2&max-keys=50&prefix=dir1%2F');
-
-const parseMaxKeys = listing._test.parseMaxKeys;
-
-check('unset falls back to S3 default', parseMaxKeys(undefined), 1000);
-check('empty string falls back', parseMaxKeys(''), 1000);
-check('garbage falls back', parseMaxKeys('abc'), 1000);
-check('zero falls back', parseMaxKeys('0'), 1000);
-check('negative falls back', parseMaxKeys('-5'), 1000);
-check('above S3 ceiling is clamped', parseMaxKeys('5000'), 1000);
-check('valid value is honored', parseMaxKeys('250'), 250);
-check('ceiling value is honored', parseMaxKeys('1000'), 1000);
-
-const s3ErrorSummary = listing._test.s3ErrorSummary;
-
-const ERR_ARG = '<?xml version="1.0" encoding="UTF-8"?>\n<Error><Code>InvalidArgument</Code>' +
-    '<Message>Invalid Argument max-keys</Message><ArgumentName>max-keys</ArgumentName>' +
-    '<ArgumentValue>1000</ArgumentValue></Error>';
-check('extracts code, message and argument',
-    s3ErrorSummary(ERR_ARG),
-    'InvalidArgument: Invalid Argument max-keys [max-keys=1000]');
-
-const ERR_PLAIN = '<Error><Code>InvalidRequest</Code><Message>unsupported</Message></Error>';
-check('extracts code and message without argument',
-    s3ErrorSummary(ERR_PLAIN), 'InvalidRequest: unsupported');
-
-check('empty body is reported, not silently blank', s3ErrorSummary(''), '(empty body)');
-check('non-XML body falls back to a prefix', s3ErrorSummary('plain failure text'), 'plain failure text');
-
-// S3 echoes the rejected header's value back, so a complaint about Authorization
-// carries the access key ID and signature. It must never reach the error log.
-const ERR_AUTH = '<Error><Code>InvalidArgument</Code><Message>Invalid Argument</Message>' +
-    '<ArgumentName>Authorization</ArgumentName>' +
-    '<ArgumentValue>AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20260101/us-east-1/s3/aws4_request, ' +
-    'Signature=deadbeef</ArgumentValue></Error>';
-check('Authorization value is redacted',
-    s3ErrorSummary(ERR_AUTH),
-    'InvalidArgument: Invalid Argument [Authorization=(redacted)]');
-
-const ERR_TOKEN = '<Error><Code>InvalidArgument</Code><Message>Invalid Argument</Message>' +
-    '<ArgumentName>x-amz-security-token</ArgumentName>' +
-    '<ArgumentValue>FwoGZXIvYXdzEBYaD...</ArgumentValue></Error>';
-check('x-amz-* value is redacted',
-    s3ErrorSummary(ERR_TOKEN),
-    'InvalidArgument: Invalid Argument [x-amz-security-token=(redacted)]');
-
-const ERR_MIXED_CASE = '<Error><Code>InvalidArgument</Code><Message>Invalid Argument</Message>' +
-    '<ArgumentName>X-Amz-Date</ArgumentName><ArgumentValue>20260101T000000Z</ArgumentValue></Error>';
-check('redaction is case-insensitive',
-    s3ErrorSummary(ERR_MIXED_CASE),
-    'InvalidArgument: Invalid Argument [X-Amz-Date=(redacted)]');
-
-console.log(failures ? `\n${failures} FAILED` : '\nall passed');
-if (failures) { throw new Error(`${failures} test(s) failed`); }
+console.log(failures ? '\n' + failures + ' FAILED' : '\nall passed');
+if (failures) { throw new Error(failures + ' test(s) failed'); }

@@ -1,304 +1,193 @@
+import xml from "xml";
 import s3gateway from "/etc/nginx/include/s3gateway.js";
 import utils from "/etc/nginx/include/utils.js";
-import awssig4 from "/etc/nginx/include/awssig4.js";
-import awscred from "/etc/nginx/include/awscredentials.js";
 
-const FOUR_O_FOUR_ON_EMPTY_BUCKET = utils.parseBoolean(process.env['FOUR_O_FOUR_ON_EMPTY_BUCKET']);
-// Entries per listing page. S3 caps max-keys at 1000 and uses 1000 when the
-// parameter is absent, so 1000 is both the default and the ceiling. Lowering it
-// shrinks the worst-case subrequest body (see subrequest_output_buffer_size).
-const LISTING_MAX_KEYS = _parseMaxKeys(process.env['S3_LISTING_MAX_KEYS']);
+var FOUR_O_FOUR_ON_EMPTY_BUCKET = utils.parseBoolean(process.env['FOUR_O_FOUR_ON_EMPTY_BUCKET']);
+var ROOT_PATH = process.env['DIRECTORY_LISTING_PATH_PREFIX'] || '';
 
-function _parseMaxKeys(raw) {
-    const n = parseInt(raw, 10);
-    if (Number.isNaN(n) || n < 1) {
-        return 1000;
+function _wantsJson(r) {
+    var accept = r.headersIn['Accept'] || '';
+    var parts = accept.split(',');
+    for (var i = 0; i < parts.length; i++) {
+        var entry = parts[i].trim();
+        var semi = entry.indexOf(';');
+        var mediaType = (semi === -1 ? entry : entry.substring(0, semi)).trim().toLowerCase();
+        if (mediaType !== 'application/json') {
+            continue;
+        }
+        if (semi === -1) {
+            return true;
+        }
+        var params = entry.substring(semi + 1);
+        var qMatch = /(?:^|;)\s*q\s*=\s*([0-9.]+)/.exec(params);
+        if (!qMatch || parseFloat(qMatch[1]) > 0) {
+            return true;
+        }
+        return false;
     }
-    return n > 1000 ? 1000 : n;
+    return false;
 }
 
-// cors.conf's per-method `if` blocks each define their own add_header set, which under
-// nginx's add_header inheritance rule means a bare add_header at the location level never
-// reaches most requests - so Vary has to be set here instead, via the header filter that
-// already runs unconditionally for this location.
+function dispatchDirectoryFormat(r) {
+    r.internalRedirect(_wantsJson(r) ? '@s3DirectoryJson' : '@s3DirectoryHtml');
+}
+
 function htmlListingHeaders(r) {
     s3gateway.editHeaders(r);
     r.headersOut['Vary'] = 'Accept';
 }
 
-// XSLT is configured per-location at parse time, so the HTML/JSON choice must
-// happen before nginx picks a location, not inside a shared one.
-function dispatchDirectoryFormat(r) {
-    r.internalRedirect(_wantsJson(r) ? "@s3DirectoryJson" : "@s3DirectoryHtml");
-}
+function jsonBodyFilter(r, data, flags) {
+    r.sendBuffer('', { last: false });
 
-function _wantsJson(r) {
-    const accept = r.headersIn['Accept'] || '';
-    return accept.toLowerCase().indexOf('application/json') !== -1;
-}
+    if (!r._jsonChunks) {
+        r._jsonChunks = [];
+    }
+    r._jsonChunks.push(data);
 
-// Fetches the listing XML through an internal proxied location rather than
-// ngx.fetch: ngx.fetch opens a raw client socket and bypasses proxy_cache, so a
-// subrequest is what makes the listing cacheable. A js_body_filter on the
-// location would not work here - with no XSLT alongside it, it doesn't reliably
-// get the body.
-async function serveDirectoryJson(r) {
-    const query = _buildListingQuery(r);
+    if (!flags.last) {
+        return;
+    }
 
-    let reply;
+    var body = r._jsonChunks.join('');
+    r._jsonChunks = null;
+
+    if (r.status === 403 || r.status === 404) {
+        r.headersOut['Content-Type'] = 'application/json; charset=utf-8';
+        r.headersOut['Vary'] = 'Accept';
+        r.status = 404;
+        r.sendBuffer(JSON.stringify({ error: 'not found' }), { last: true });
+        return;
+    }
+    if (r.status >= 400) {
+        r.headersOut['Content-Type'] = 'application/json; charset=utf-8';
+        r.headersOut['Vary'] = 'Accept';
+        r.status = r.status >= 500 ? 502 : r.status;
+        var errMsg = r.status >= 500 ? 'upstream listing request failed' : 'listing request failed';
+        r.sendBuffer(JSON.stringify({ error: errMsg }), { last: true });
+        return;
+    }
+
+    var result;
     try {
-        reply = await r.subrequest('/_s3_listing', { args: query });
-    } catch (error) {
-        r.error(`listing_json: failed to fetch S3 listing: ${error}`);
-        return r.internalRedirect('@error404');
+        result = _parseXmlToJson(body);
+    } catch (e) {
+        r.error('listing_json: failed to parse listing XML: ' + e);
+        r.headersOut['Content-Type'] = 'application/json; charset=utf-8';
+        r.headersOut['Vary'] = 'Accept';
+        r.sendBuffer(JSON.stringify({ error: 'upstream listing parse failed' }), { last: true });
+        return;
     }
 
-    if (reply.status === 400) {
-        // Log S3's own <Code>/<Message> plus the query we sent. The raw body is
-        // not logged: nginx truncates long error lines, and the XML prolog alone
-        // fills the line before <Code> is reached. A 400 can be a bad
-        // continuation-token, but equally a rejected parameter or header, and
-        // guessing in the message sends readers after the wrong cause.
-        r.error(`listing_json: S3 rejected the listing: ${_s3ErrorSummary(reply.responseText)} | sent: ${query}`);
-        const hadToken = !!(r.args && r.args['continuation-token']);
-        return r.return(400, JSON.stringify({
-            error: hadToken ? 'invalid continuation-token' : 'S3 rejected the listing request'
-        }));
-    }
-    if (reply.status === 403 || reply.status === 404) {
-        return r.internalRedirect('@error404');
-    }
-    // An upstream failure is not a missing directory - reporting 404 here would
-    // tell a client the folder is gone when S3 is merely broken or unreachable.
-    // (LocalStack answers 500 for a malformed continuation-token where real S3
-    // answers 400, so both paths have to be non-404.)
-    if (reply.status >= 500) {
-        r.error(`listing_json: S3 returned ${reply.status} fetching listing`);
-        return r.return(502, JSON.stringify({ error: 'upstream listing request failed' }));
-    }
-    if (reply.status !== 200) {
-        r.error(`listing_json: unexpected status ${reply.status} fetching S3 listing`);
-        return r.internalRedirect('@error404');
-    }
-
-    const xml = reply.responseText;
-    const result = _parseListBucketResult(xml);
-
-    // Only a first page may 404 on empty: the last page of an exactly-N*1000-key
-    // directory is legitimately empty, and 404ing it breaks a paging client mid-walk.
-    const isFirstPage = !(r.args && r.args['continuation-token']);
+    var isFirstPage = !r.variables.arg_marker;
     if (FOUR_O_FOUR_ON_EMPTY_BUCKET && isFirstPage && result.entries.length === 0) {
-        return r.internalRedirect('@error404');
+        r.headersOut['Content-Type'] = 'application/json; charset=utf-8';
+        r.headersOut['Vary'] = 'Accept';
+        r.status = 404;
+        r.sendBuffer(JSON.stringify({ error: 'not found' }), { last: true });
+        return;
     }
 
     r.headersOut['Content-Type'] = 'application/json; charset=utf-8';
     r.headersOut['Vary'] = 'Accept';
-    r.return(200, JSON.stringify(result));
+    r.sendBuffer(JSON.stringify(result), { last: true });
 }
 
-// Pulls <Code>/<Message> out of an S3 error body. nginx truncates long error
-// log lines, so the useful fields have to lead.
-function _s3ErrorSummary(body) {
-    if (!body) {
-        return '(empty body)';
-    }
-    const code = /<Code>([\s\S]*?)<\/Code>/.exec(body);
-    const message = /<Message>([\s\S]*?)<\/Message>/.exec(body);
-    const argName = /<ArgumentName>([\s\S]*?)<\/ArgumentName>/.exec(body);
-    const argValue = /<ArgumentValue>([\s\S]*?)<\/ArgumentValue>/.exec(body);
-    if (!code && !message) {
-        return body.substring(0, 200);
-    }
-    let out = `${code ? code[1] : '?'}: ${message ? message[1] : '?'}`;
-    if (argName) {
-        const name = argName[1];
-        // S3 echoes the rejected header back in <ArgumentValue>. For Authorization
-        // that is the access key ID and the request signature, and x-amz-security-token
-        // is a session credential - neither belongs in the error log. The name alone
-        // is what identifies which header S3 objected to.
-        const value = _isSensitiveArgument(name)
-            ? '(redacted)'
-            : (argValue ? argValue[1] : '');
-        out += ` [${name}=${value}]`;
-    }
-    return out;
-}
-
-function _isSensitiveArgument(name) {
-    const lower = name.toLowerCase();
-    return lower === 'authorization' || lower.indexOf('x-amz-') === 0;
-}
-
-// s3gateway.s3BaseUri is not exported by the base image, so re-derive it.
-// Must stay identical to upstream's s3BaseUri: path style prefixes the bucket,
-// virtual-host style uses the empty string.
-function _s3BaseUri() {
-    return process.env['S3_STYLE'] === 'path' ? '/' + process.env['S3_BUCKET_NAME'] : '';
-}
-
-// Signs the listing query with the base image's own sigv4 implementation.
-// Upstream's $s3auth cannot be reused: _s3ReqParamsForSigV4 derives its
-// queryParams from _s3DirQueryParams, which emits only delimiter/prefix and
-// never reads r.args - so a continuation-token would be sent but not signed.
-function _signListingQuery(r, queryParams) {
-    if (process.env['AWS_SIGS_VERSION'] !== '4') {
-        throw new Error('listing_json: JSON listing pagination requires AWS_SIGS_VERSION=4, got ' +
-            process.env['AWS_SIGS_VERSION']);
-    }
-    return awssig4.signatureV4(
-        r, awscred.Now(), process.env['S3_REGION'], 's3',
-        listingUri(r), queryParams,
-        r.variables.s3_host, awscred.readCredentials(r));
-}
-
-// js_set handler for $s3_listing_uri: the S3 path the listing is addressed to.
-// Path style puts the bucket here (GET /bucket?list-type=2); virtual-host style
-// uses "/". Must return exactly what _signListingQuery signs, or the request is
-// signed for one path and sent to another.
-function listingUri(r) {
-    const baseUri = _s3BaseUri();
-    return baseUri.length > 0 ? baseUri : '/';
-}
-
-// js_set handler for $s3_listing_auth. Runs on the /_s3_listing subrequest and
-// signs that subrequest's own $args - which serveDirectoryJson set from
-// _buildListingQuery - so the signed string is the sent string by construction.
-function listingAuth(r) {
-    return _signListingQuery(r, r.variables.args || '');
-}
-
-// Builds the canonical ListObjectsV2 query string. sigv4 requires the
-// parameters sorted by name, and the string signed must be byte-identical to
-// the string sent - so this one function is the only place the query is built.
-// Sorted order: continuation-token, delimiter, list-type, max-keys, prefix.
-function _buildListingQuery(r) {
-    const params = [];
-
-    const token = (r.args && r.args['continuation-token']) || '';
-    if (token) {
-        params.push('continuation-token=' + s3gateway._encodeURIComponent(token));
+function _parseXmlToJson(body) {
+    var parsed = xml.parse(body);
+    var root = parsed.ListBucketResult;
+    if (!root) {
+        throw new Error('no ListBucketResult element');
     }
 
-    params.push('delimiter=%2F');
-    params.push('list-type=2');
-    // sigv4 signs the query sorted by name; max-keys belongs between list-type
-    // and prefix. Moving it breaks every signature, not just the page size.
-    params.push('max-keys=' + LISTING_MAX_KEYS);
+    var globalPrefix = root.Prefix ? root.Prefix.$text || '' : '';
+    var truncated = root.IsTruncated ? root.IsTruncated.$text === 'true' : false;
 
-    const uriPath = r.variables.uri_path;
-    if (uriPath !== '/') {
-        const decoded = decodeURIComponent(uriPath);
-        const withoutLeadingSlash = decoded.charAt(0) === '/' ? decoded.substring(1) : decoded;
-        if (withoutLeadingSlash) {
-            params.push('prefix=' + s3gateway._encodeURIComponent(withoutLeadingSlash));
+    var nextMarker = null;
+    if (root.NextMarker && root.NextMarker.$text) {
+        var raw = root.NextMarker.$text;
+        nextMarker = raw.indexOf(globalPrefix) === 0
+            ? raw.substring(globalPrefix.length) : raw;
+    }
+
+    var entries = [];
+    var tags = root.$tags || [];
+
+    for (var i = 0; i < tags.length; i++) {
+        var tag = tags[i];
+
+        if (tag.$name === 'CommonPrefixes') {
+            var prefixTag = tag.$tags ? tag.$tags[0] : null;
+            if (!prefixTag) { continue; }
+            var full = prefixTag.$text || '';
+            if (full === globalPrefix) { continue; }
+            var dirName = full.substring(globalPrefix.length).replace(/\/$/, '');
+            entries.push({
+                name: dirName,
+                type: 'directory',
+                size: null,
+                lastModified: null,
+                href: _buildHref(ROOT_PATH, full)
+            });
+        }
+
+        if (tag.$name === 'Contents') {
+            var keyTag = _findChildTag(tag, 'Key');
+            if (!keyTag) { continue; }
+            var key = keyTag.$text || '';
+            if (key === globalPrefix) { continue; }
+            var sizeTag = _findChildTag(tag, 'Size');
+            var lastModTag = _findChildTag(tag, 'LastModified');
+            entries.push({
+                name: key.substring(globalPrefix.length),
+                type: 'file',
+                size: sizeTag ? Number(sizeTag.$text) : null,
+                lastModified: lastModTag ? lastModTag.$text : null,
+                href: _buildHref(ROOT_PATH, key)
+            });
         }
     }
-
-    return params.join('&');
-}
-
-// Converts a ListBucketResult XML doc to { path, entries: [{ name, type, size, lastModified }] }.
-function _parseListBucketResult(xml) {
-    const rootPath = process.env['DIRECTORY_LISTING_PATH_PREFIX'] || '';
-    // Root <Prefix> is self-closed when empty; match either form, preferring one with content.
-    const prefixMatch = /<Prefix>([\s\S]*?)<\/Prefix>|<Prefix\s*\/>/.exec(xml);
-    const globalPrefix = prefixMatch && prefixMatch[1] ? _decodeXmlEntities(prefixMatch[1]) : '';
-
-    const entries = [];
-
-    const commonPrefixRe = /<CommonPrefixes>([\s\S]*?)<\/CommonPrefixes>/g;
-    let match;
-    while ((match = commonPrefixRe.exec(xml)) !== null) {
-        const prefixInner = /<Prefix>([\s\S]*?)<\/Prefix>/.exec(match[1]);
-        if (!prefixInner) {
-            continue;
-        }
-        const full = _decodeXmlEntities(prefixInner[1]);
-        if (full === globalPrefix) {
-            continue;
-        }
-        entries.push({
-            name: full.substring(globalPrefix.length).replace(/\/$/, ''),
-            type: 'directory',
-            size: null,
-            lastModified: null,
-            href: _buildHref(rootPath, full)
-        });
-    }
-
-    const contentsRe = /<Contents>([\s\S]*?)<\/Contents>/g;
-    while ((match = contentsRe.exec(xml)) !== null) {
-        const block = match[1];
-        const keyMatch = /<Key>([\s\S]*?)<\/Key>/.exec(block);
-        if (!keyMatch) {
-            continue;
-        }
-        const key = _decodeXmlEntities(keyMatch[1]);
-        if (key === globalPrefix) {
-            continue;
-        }
-        const sizeMatch = /<Size>([\s\S]*?)<\/Size>/.exec(block);
-        const lastModifiedMatch = /<LastModified>([\s\S]*?)<\/LastModified>/.exec(block);
-        entries.push({
-            name: key.substring(globalPrefix.length),
-            type: 'file',
-            size: sizeMatch ? Number(sizeMatch[1]) : null,
-            lastModified: lastModifiedMatch ? lastModifiedMatch[1] : null,
-            href: _buildHref(rootPath, key)
-        });
-    }
-
-    const truncatedMatch = /<IsTruncated>([\s\S]*?)<\/IsTruncated>/.exec(xml);
-    const tokenMatch = /<NextContinuationToken>([\s\S]*?)<\/NextContinuationToken>/.exec(xml);
 
     return {
-        path: rootPath + globalPrefix,
-        entries,
-        truncated: truncatedMatch ? truncatedMatch[1] === 'true' : false,
-        nextContinuationToken: tokenMatch ? _decodeXmlEntities(tokenMatch[1]) : null
+        path: ROOT_PATH + globalPrefix,
+        entries: entries,
+        truncated: truncated,
+        nextMarker: nextMarker
     };
 }
 
-// Per-segment percent-encoding, matching listing.xsl's encode-uri template.
-function _buildHref(rootPath, path) {
-    const encoded = (rootPath + path).split('/').map((seg) => seg ? s3gateway._encodeURIComponent(seg) : seg).join('/');
-    return '/' + encoded;
+function _findChildTag(parent, name) {
+    var tags = parent.$tags || [];
+    for (var i = 0; i < tags.length; i++) {
+        if (tags[i].$name === name) { return tags[i]; }
+    }
+    return null;
 }
 
-const XML_ENTITIES = {
-    'amp': '&',
-    'lt': '<',
-    'gt': '>',
-    'quot': '"',
-    'apos': "'"
-};
-
-function _decodeXmlEntities(value) {
-    return value.replace(/&(#x?[0-9a-fA-F]+|[a-z]+);/g, (entity, body) => {
-        if (body[0] === '#') {
-            const codePoint = body[1] === 'x' || body[1] === 'X'
-                ? parseInt(body.substring(2), 16)
-                : parseInt(body.substring(1), 10);
-            return Number.isNaN(codePoint) ? entity : String.fromCodePoint(codePoint);
-        }
-        return body in XML_ENTITIES ? XML_ENTITIES[body] : entity;
-    });
+function _buildHref(rootPath, path) {
+    var prefix = rootPath;
+    if (prefix.length > 0 && prefix.charAt(prefix.length - 1) !== '/' && path.charAt(0) !== '/') {
+        prefix = prefix + '/';
+    }
+    var full = prefix + path;
+    if (full.charAt(0) === '/') {
+        full = full.substring(1);
+    }
+    var segments = full.split('/');
+    var encoded = [];
+    for (var i = 0; i < segments.length; i++) {
+        encoded.push(segments[i] ? s3gateway._encodeURIComponent(segments[i]) : segments[i]);
+    }
+    return '/' + encoded.join('/');
 }
 
 export default {
     dispatchDirectoryFormat,
-    serveDirectoryJson,
+    jsonBodyFilter,
     htmlListingHeaders,
-    listingAuth,
-    listingUri,
-    // Pure helpers, exported for nginx-config/listing_json.test.js only.
-    // Nothing in the nginx config references these.
     _test: {
-        parseListBucketResult: _parseListBucketResult,
-        decodeXmlEntities: _decodeXmlEntities,
+        parseXmlToJson: _parseXmlToJson,
         buildHref: _buildHref,
-        buildListingQuery: _buildListingQuery,
-        parseMaxKeys: _parseMaxKeys,
-        s3ErrorSummary: _s3ErrorSummary
+        wantsJson: _wantsJson
     }
 };

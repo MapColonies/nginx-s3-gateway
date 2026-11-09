@@ -18,6 +18,7 @@ paid login to pull.)
 From the `example` folder:
 
 ```bash
+../scripts/render-example-config.sh   # one-time, re-run after helm/config changes
 docker-compose up -d --build
 ```
 
@@ -36,27 +37,19 @@ curl http://localhost:8080/example.txt
 
 Adjust bucket name, credentials and cache settings in `.env`.
 
-### Keeping `nginx.conf`, `default.conf.template`, `log_format.conf` in sync
+### Rendering the nginx config files
 
 In the real k8s Deployment, Helm renders `helm/config/nginx.conf.template`,
 `default.conf.template`, and `log_format.conf` (resolving their `{{ }}` conditionals) and
-mounts the result over the vendor's own copies - that's how the gateway's customizations
-(OPA/readiness routes, njs/xslt/otel module loading, the JSON directory listing) actually
-take effect. `docker-compose` has no Helm templating step, so this folder's `nginx.conf`,
-`default.conf.template`, and `log_format.conf` are committed as pre-rendered, static
-equivalents (Helm conditionals resolved for a plain default setup: OPA disabled, otel
-tracing off but the module loaded). If you change `helm/config/*.template`, re-render these
-with:
+mounts the result over the vendor's own copies. `docker-compose` has no Helm templating
+step, so you must render the config files locally before starting the stack:
 
 ```bash
 ../scripts/render-example-config.sh
 ```
 
-or check whether they're already in sync (exits nonzero on drift, e.g. for CI) with:
+This produces `nginx.conf`, `default.conf.template`, and `log_format.conf` in this folder
+(gitignored — they are not committed). The script needs Helm and the private `mclabels`
+chart dependency (`helm/Chart.yaml`); it runs `helm dependency build` automatically.
 
-```bash
-../scripts/render-example-config.sh --check
-```
-
-Both need the private `mclabels` Helm dependency (`helm/Chart.yaml`) resolved first
-(`helm dependency build ../helm`) - the script runs that automatically.
+Re-run the script whenever you change `helm/config/*.template`.

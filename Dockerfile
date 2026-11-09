@@ -2,7 +2,7 @@
 ARG NGINX_BASE_IMAGE
 
 # Stage 1: the official S3 Gateway source (version-independent gateway pieces).
-FROM nginxinc/nginx-s3-gateway:unprivileged-oss-20250825 AS gateway-source
+FROM nginxinc/nginx-s3-gateway:unprivileged-oss-20261014 AS gateway-source
 
 # Stage 2: build the final image on the MapColonies nginx base.
 FROM ${NGINX_BASE_IMAGE}

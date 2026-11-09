@@ -20,16 +20,6 @@ map $uri_full_path $uri_path {
     default $PREFIX_LEADING_DIRECTORY_PATH$uri_full_path;
 }
 
-# Behind a TLS-terminating proxy (e.g. an OpenShift Route) $scheme is the
-# scheme of the plain-HTTP connection nginx itself sees, not the client's -
-# building a redirect from it sends the client to http://, which such a proxy
-# then bounces straight back to https://, looping. Prefer the proxy's own
-# X-Forwarded-Proto when present.
-map $http_x_forwarded_proto $external_scheme {
-    default $http_x_forwarded_proto;
-    ''      $scheme;
-}
-
 # S3_HOST_HEADER is set in the startup script
 # (either ./common/docker-entrypoint.sh or ./standalone_ubuntu_oss_install.sh)
 # based on the S3_STYLE configuration option.
@@ -41,12 +31,13 @@ js_var $forIndexPage true;
 js_set $s3auth s3gateway.s3auth;
 js_set $awsSessionToken awscredentials.sessionToken;
 js_set $s3uri s3gateway.s3uri;
-js_set $s3_listing_uri listing_json.listingUri;
-js_set $s3_listing_auth listing_json.listingAuth;
 
 server {
     listen 8080;
     server_name  localhost;
+
+    absolute_redirect off;
+
     # In case you use "add_header" in the location block, this "add_header" will be ignored!
     add_header 'Access-Control-Max-Age' '7200';
 
@@ -245,155 +236,85 @@ server {
         # results such that we can output an HTML directory contents list.
         xslt_stylesheet /etc/nginx/include/listing.xsl;
         xslt_string_param rootPath '${DIRECTORY_LISTING_PATH_PREFIX}';
+        xslt_string_param prefixPath '${PREFIX_LEADING_DIRECTORY_PATH}';
         xslt_types application/xml;
 
-        # We apply an output filter to the XML input received from S3 before it
-        # is passed to XSLT in order to determine if the resource is not a valid
-        # S3 directory. If it isn't a valid directory, we do a dirty hack to
-        # corrupt the contents of the XML causing the XSLT to fail and thus
-        # nginx to return a 404 to the client. If you don't care about empty
-        # directory listings for invalid directories, remove this.
         js_body_filter s3gateway.filterListResponse;
 
-        # Catch all errors from S3 and sanitize them so that the user can't
-        # gain intelligence about the S3 bucket being proxied.
         proxy_intercept_errors on;
 
-        # Comment out this line to receive the error messages returned by S3
         error_page 400 401 402 403 404 405 406 407 408 409 410 411 412 413 414 415 416 417 418 420 422 423 424 426 428 429 431 444 449 450 451 500 501 502 503 504 505 506 507 508 509 510 511 =404 @error404;
 
         js_content s3gateway.loadContent;
         include /etc/nginx/conf.d/gateway/s3listing_location.conf;
     }
 
-    # xslt_stylesheet is per-location at parse time, so format is picked here before
-    # nginx commits to @s3DirectoryHtml or @s3DirectoryJson.
     location @s3Directory {
         js_content listing_json.dispatchDirectoryFormat;
     }
 
     location @s3DirectoryHtml {
-        # We include only the headers needed for the authentication signatures that
-        # we plan to use.
         include /etc/nginx/conf.d/gateway/v${AWS_SIGS_VERSION}_headers.conf;
 
-        # Necessary for determining the correct URI to construct.
         set $forIndexPage false;
 
-        # The CORS configuration needs to be imported in several places in order for
-        # it to be applied within different contexts.
         include /etc/nginx/conf.d/gateway/cors.conf;
 
-        # Don't allow any headers from the client - we don't want them messing
-        # with S3 at all.
         proxy_pass_request_headers off;
 
-        # Enable passing of the server name through TLS Server Name Indication extension.
         proxy_ssl_server_name on;
         proxy_ssl_name ${S3_SERVER};
 
-        # Set the Authorization header to the AWS Signatures credentials
         proxy_set_header Authorization $s3auth;
         proxy_set_header X-Amz-Security-Token $awsSessionToken;
 
-        # We set the host as the bucket name to inform the S3 API of the bucket
         proxy_set_header Host $s3_host;
 
-        # Use keep alive connections in order to improve performance
         proxy_http_version 1.1;
         proxy_set_header Connection '';
 
-        # We strip off all of the AWS specific headers from the server so that
-        # there is nothing identifying the object as having originated in an
-        # object store.
         js_header_filter listing_json.htmlListingHeaders;
 
-        # Apply XSL transformation to the XML returned from S3 directory listing
-        # results such that we can output an HTML directory contents list.
         xslt_stylesheet /etc/nginx/include/listing.xsl;
         xslt_string_param rootPath '${DIRECTORY_LISTING_PATH_PREFIX}';
+        xslt_string_param prefixPath '${PREFIX_LEADING_DIRECTORY_PATH}';
         xslt_types application/xml;
 
-        # We apply an output filter to the XML input received from S3 before it
-        # is passed to XSLT in order to determine if the resource is not a valid
-        # S3 directory. If it isn't a valid directory, we do a dirty hack to
-        # corrupt the contents of the XML causing the XSLT to fail and thus
-        # nginx to return a 404 to the client. If you don't care about empty
-        # directory listings for invalid directories, remove this.
         js_body_filter s3gateway.filterListResponse;
 
-        # Catch all errors from S3 and sanitize them so that the user can't
-        # gain intelligence about the S3 bucket being proxied.
         proxy_intercept_errors on;
 
-        # Comment out this line to receive the error messages returned by S3
         error_page 400 401 402 403 404 405 406 407 408 409 410 411 412 413 414 415 416 417 418 420 422 423 424 426 428 429 431 444 449 450 451 500 501 502 503 504 505 506 507 508 509 510 511 =404 @error404;
 
-        proxy_pass  ${S3_SERVER_PROTO}://storage_urls$s3Uri;
+        proxy_pass  ${S3_SERVER_PROTO}://storage_urls$s3uri;
         include /etc/nginx/conf.d/gateway/s3listing_location.conf;
     }
 
-    # Same listing, rendered as JSON for "Accept: application/json" (axios's default).
-    # Cached via the /_s3_listing subrequest, keyed on the listing query so each
-    # page gets its own entry.
     location @s3DirectoryJson {
+        include /etc/nginx/conf.d/gateway/v${AWS_SIGS_VERSION}_headers.conf;
+
         set $forIndexPage false;
 
         include /etc/nginx/conf.d/gateway/cors.conf;
 
-        js_content listing_json.serveDirectoryJson;
-    }
-
-    # The XML listing, fetched through the proxy pipeline so proxy_cache applies.
-    # Reached only via subrequest from listing_json.serveDirectoryJson; ngx.fetch
-    # would open a raw client socket and bypass the cache entirely. The auth header
-    # is re-signed here from this subrequest's own $args, so the signed and the sent
-    # query strings cannot drift apart.
-    # Exact match, not a prefix: `location /_s3_listing` would also swallow any
-    # object key starting with that string (e.g. /_s3_listing_report.csv) and
-    # 404 it, since the location is internal. Same reason as `= /_combined_auth`.
-    location = /_s3_listing {
-        internal;
-
-        # r.subrequest() buffers the whole upstream body in memory and the
-        # default buffer is one page. A full 1000-key ListObjectsV2 response is
-        # ~200KB, and approaches ~1.2MB when keys near S3's 1024-byte limit, so
-        # the buffer must cover a worst-case page or the listing dies with
-        # "too big subrequest response". nginx reads this from the subrequest's
-        # own location, not from the location that issued it. This is the memory
-        # cost of caching the listing - ngx.fetch had no cap but no cache either.
-        subrequest_output_buffer_size 2m;
-
-        proxy_cache s3_cache;
-        proxy_cache_valid 200 ${PROXY_CACHE_VALID_OK};
-        proxy_cache_valid 400 404 ${PROXY_CACHE_VALID_NOTFOUND};
-        # nginx matches the first proxy_cache_valid entry for a status, so 403 has
-        # to be off the line above to pick up the shorter forbidden TTL used at the
-        # server level - a credential or clock problem must not be held for 1m.
-        proxy_cache_valid 403 ${PROXY_CACHE_VALID_FORBIDDEN};
-        # $args carries the full canonical listing query - page 2 must not share
-        # page 1's entry. The literal prefix keeps these XML bodies in their own
-        # keyspace, away from the object entries keyed "$request_method$host$uri".
-        proxy_cache_key "listing:$host$uri$args";
-
-        include /etc/nginx/conf.d/gateway/v${AWS_SIGS_VERSION}_headers.conf;
         proxy_pass_request_headers off;
+
         proxy_ssl_server_name on;
         proxy_ssl_name ${S3_SERVER};
 
-        proxy_set_header Authorization $s3_listing_auth;
+        proxy_set_header Authorization $s3auth;
         proxy_set_header X-Amz-Security-Token $awsSessionToken;
-        # Without this nginx sends the upstream block's name ("storage_urls") as
-        # Host, which S3 rejects with InvalidRequest "invalid hostname" - and it
-        # is also the host the signature was computed over, so the two must match.
+
         proxy_set_header Host $s3_host;
 
-        # Use keep alive connections in order to improve performance.
-        # Connection '' is inert without this - nginx would speak HTTP/1.0 to S3
-        # and open a fresh TLS connection for every listing page.
         proxy_http_version 1.1;
         proxy_set_header Connection '';
-        proxy_pass ${S3_SERVER_PROTO}://storage_urls$s3_listing_uri?$args;
+
+        js_header_filter s3gateway.editHeaders;
+        js_body_filter listing_json.jsonBodyFilter;
+
+        proxy_pass  ${S3_SERVER_PROTO}://storage_urls$s3uri;
+        include /etc/nginx/conf.d/gateway/s3listing_location.conf;
     }
 
     location ~ /index.html$ {
@@ -460,10 +381,7 @@ server {
     }
 
     location @trailslash {
-        # 302 to request without slashes
-        # Adding a ? to the end of the replacement param in `rewrite` prevents it from
-        # appending the query string.
-        rewrite ^ $external_scheme://$http_host$uri/$is_args$query_string? redirect;
+        rewrite ^ $uri/$is_args$query_string? redirect;
     }
 
     # Provide a hint to the client on 405 errors of the acceptable request methods
