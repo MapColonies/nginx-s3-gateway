@@ -10,7 +10,8 @@ FROM ${NGINX_BASE_IMAGE}
 USER root
 
 # The MapColonies nginx base is Alpine; the gateway entrypoint needs bash.
-RUN apk add --no-cache bash
+# The upstream scripts use #!/usr/bin/bash (Debian path); Alpine puts bash in /bin.
+RUN apk add --no-cache bash && ln -sf /bin/bash /usr/bin/bash
 
 COPY --from=gateway-source /etc/nginx/include /etc/nginx/include
 COPY --from=gateway-source /etc/nginx/templates /etc/nginx/templates
