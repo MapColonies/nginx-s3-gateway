@@ -20,6 +20,9 @@ metadata:
     {{- if $route.timeout.enabled }}
     haproxy.router.openshift.io/timeout: {{ $route.timeout.duration }}
     {{- end }}
+    {{- if $route.disableCookies }}
+    haproxy.router.openshift.io/disable_cookies: "true"
+    {{- end }}
 spec:
   {{- if $routesMapping.host }}
   host: {{ $routesMapping.host | quote }}
