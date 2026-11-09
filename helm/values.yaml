@@ -86,7 +86,6 @@ route:
     enabled: false
     duration: 60s # supported units (us, ms, s, m, h, d)
   rewriteTarget: ""
-  # The router's sticky-session cookie also makes it add "Cache-Control: private" to cacheable responses.
   disableCookies: true
   tls:
     enabled: true
