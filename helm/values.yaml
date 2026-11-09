@@ -86,6 +86,7 @@ route:
     enabled: false
     duration: 60s # supported units (us, ms, s, m, h, d)
   rewriteTarget: ""
+  disableCookies: true
   tls:
     enabled: true
     termination: edge
