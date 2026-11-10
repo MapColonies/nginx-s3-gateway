@@ -1,7 +1,4 @@
 {{- $cors := .Values.cors -}}
-# OPTIONS preflight: return 204 immediately (browsers never send credentials
-# with preflight). `return` runs in the rewrite phase, before auth_request,
-# so this intentionally bypasses auth — that is correct CORS behaviour.
 if ($request_method = "OPTIONS") {
     add_header 'Access-Control-Allow-Origin' '{{ $cors.allowedOrigin }}';
     add_header 'Access-Control-Allow-Methods' '{{ $cors.allowedMethods }}';
@@ -13,12 +10,6 @@ if ($request_method = "OPTIONS") {
     return 204;
 }
 
-# Non-OPTIONS: add CORS response headers unconditionally.
-# This file is only mounted when cors.enabled=true, so the check is redundant.
-# IMPORTANT: do NOT use if blocks here. A matching if block without a return
-# creates an implicit nested location in nginx where auth_request from the
-# parent location is silently dropped, bypassing authentication for all
-# authenticated methods (GET, HEAD, …).
 add_header 'Access-Control-Allow-Origin' '{{ $cors.allowedOrigin }}' always;
 add_header 'Access-Control-Allow-Methods' '{{ $cors.allowedMethods }}' always;
 add_header 'Access-Control-Allow-Headers' '{{ $cors.allowedHeaders }}' always;
