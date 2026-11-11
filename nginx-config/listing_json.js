@@ -37,9 +37,14 @@ function htmlListingHeaders(r) {
     r.headersOut['Vary'] = 'Accept';
 }
 
-function jsonBodyFilter(r, data, flags) {
-    r.sendBuffer('', { last: false });
+function jsonListingHeaders(r) {
+    s3gateway.editHeaders(r);
+    r.headersOut['Content-Type'] = 'application/json; charset=utf-8';
+    r.headersOut['Vary'] = 'Accept';
+    delete r.headersOut['Content-Length'];
+}
 
+function jsonBodyFilter(r, data, flags) {
     if (!r._jsonChunks) {
         r._jsonChunks = [];
     }
@@ -53,15 +58,11 @@ function jsonBodyFilter(r, data, flags) {
     r._jsonChunks = null;
 
     if (r.status === 403 || r.status === 404) {
-        r.headersOut['Content-Type'] = 'application/json; charset=utf-8';
-        r.headersOut['Vary'] = 'Accept';
         r.status = 404;
         r.sendBuffer(JSON.stringify({ error: 'not found' }), { last: true });
         return;
     }
     if (r.status >= 400) {
-        r.headersOut['Content-Type'] = 'application/json; charset=utf-8';
-        r.headersOut['Vary'] = 'Accept';
         r.status = r.status >= 500 ? 502 : r.status;
         var errMsg = r.status >= 500 ? 'upstream listing request failed' : 'listing request failed';
         r.sendBuffer(JSON.stringify({ error: errMsg }), { last: true });
@@ -73,23 +74,17 @@ function jsonBodyFilter(r, data, flags) {
         result = _parseXmlToJson(body);
     } catch (e) {
         r.error('listing_json: failed to parse listing XML: ' + e);
-        r.headersOut['Content-Type'] = 'application/json; charset=utf-8';
-        r.headersOut['Vary'] = 'Accept';
         r.sendBuffer(JSON.stringify({ error: 'upstream listing parse failed' }), { last: true });
         return;
     }
 
     var isFirstPage = !r.variables.arg_marker;
     if (FOUR_O_FOUR_ON_EMPTY_BUCKET && isFirstPage && result.entries.length === 0) {
-        r.headersOut['Content-Type'] = 'application/json; charset=utf-8';
-        r.headersOut['Vary'] = 'Accept';
         r.status = 404;
         r.sendBuffer(JSON.stringify({ error: 'not found' }), { last: true });
         return;
     }
 
-    r.headersOut['Content-Type'] = 'application/json; charset=utf-8';
-    r.headersOut['Vary'] = 'Accept';
     r.sendBuffer(JSON.stringify(result), { last: true });
 }
 
@@ -184,6 +179,7 @@ function _buildHref(rootPath, path) {
 export default {
     dispatchDirectoryFormat,
     jsonBodyFilter,
+    jsonListingHeaders,
     htmlListingHeaders,
     _test: {
         parseXmlToJson: _parseXmlToJson,

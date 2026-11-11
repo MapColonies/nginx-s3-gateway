@@ -1,5 +1,5 @@
 # MapColonies S3 gateway image — built on the MapColonies nginx base.
-ARG NGINX_BASE_IMAGE
+ARG NGINX_BASE_IMAGE=acrarolibotnonprod.azurecr.io/common/nginx:1.31.7-otel-dev
 
 # Stage 1: the official S3 Gateway source (version-independent gateway pieces).
 FROM nginxinc/nginx-s3-gateway:unprivileged-oss-20261014 AS gateway-source
@@ -24,6 +24,7 @@ COPY --from=gateway-source /docker-entrypoint.sh /docker-entrypoint.sh
 
 # ENV defaults the gateway image carries but the base does not
 ENV DIRECTORY_LISTING_PATH_PREFIX= \
+    DIRECTORY_LISTING_PAGE_SIZE= \
     STRIP_LEADING_DIRECTORY_PATH= \
     PREFIX_LEADING_DIRECTORY_PATH= \
     PROXY_CACHE_MAX_SIZE=10g \

@@ -310,7 +310,7 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Connection '';
 
-        js_header_filter s3gateway.editHeaders;
+        js_header_filter listing_json.jsonListingHeaders;
         js_body_filter listing_json.jsonBodyFilter;
 
         proxy_pass  ${S3_SERVER_PROTO}://storage_urls$s3uri;
