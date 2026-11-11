@@ -152,3 +152,25 @@ otel_trace off;
 {{- end -}}
 otel_trace_context propagate;
 {{- end -}}
+
+{{/*
+Request authorization for locations that proxy to S3: OPA (optionally combined
+with S3 credential retrieval) or S3 credentials only. Every location that serves
+bucket content must include this, otherwise it skips the token check.
+*/}}
+{{- define "nginx-s3-gateway.authRequest" -}}
+set $original_method $request_method;
+set $original_args $args;
+{{- if .Values.authorization.opa.enabled }}
+set $domain {{ .Values.authorization.opa.domain }};
+{{- if .Values.authorization.s3.enabled }}
+auth_request /_combined_auth;
+{{- else }}
+auth_request /_opa_auth;
+{{- end }}
+otel_span_attr opa.result $opa_result;
+otel_span_attr opa.reason $opa_reason;
+{{- else if .Values.authorization.s3.enabled }}
+auth_request /aws/credentials/retrieve;
+{{- end }}
+{{- end -}}

@@ -128,21 +128,7 @@ server {
 
         {{ include "nginx-s3-gateway.otelTrace" . | nindent 8 }}
 
-        set $original_method $request_method;
-        set $original_args $args;
-
-        {{ if .Values.authorization.opa.enabled }}
-        set $domain {{ .Values.authorization.opa.domain }};
-        {{ if .Values.authorization.s3.enabled }}
-        auth_request /_combined_auth;
-        {{ else }}
-        auth_request /_opa_auth;
-        {{ end }}
-        otel_span_attr opa.result $opa_result;
-        otel_span_attr opa.reason $opa_reason;
-        {{ else if .Values.authorization.s3.enabled }}
-        auth_request /aws/credentials/retrieve;
-        {{ end }}
+        {{ include "nginx-s3-gateway.authRequest" . | nindent 8 }}
 
         # Redirect to the proper location based on the client request - either
         # @s3, @s3PreListing or @error405.
@@ -316,6 +302,11 @@ server {
 
     location ~ /index.html$ {
         # Configuration for handling locations ending with /index.html
+
+        # This regex location takes precedence over `location /`, so it must
+        # carry the same authorization, or */index.html skips the token check.
+        {{ include "nginx-s3-gateway.otelTrace" . | nindent 8 }}
+        {{ include "nginx-s3-gateway.authRequest" . | nindent 8 }}
 
         # Necessary for determining the correct URI to construct.
         set $forIndexPage true;
