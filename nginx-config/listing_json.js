@@ -1,9 +1,8 @@
 import xml from "xml";
 import s3gateway from "/etc/nginx/include/s3gateway.js";
-import utils from "/etc/nginx/include/utils.js";
 
-var FOUR_O_FOUR_ON_EMPTY_BUCKET = utils.parseBoolean(process.env['FOUR_O_FOUR_ON_EMPTY_BUCKET']);
 var ROOT_PATH = process.env['DIRECTORY_LISTING_PATH_PREFIX'] || '';
+var PREFIX_PATH = process.env['PREFIX_LEADING_DIRECTORY_PATH'] || '';
 
 function _wantsJson(r) {
     var accept = r.headersIn['Accept'] || '';
@@ -54,38 +53,24 @@ function jsonBodyFilter(r, data, flags) {
         return;
     }
 
-    var body = r._jsonChunks.join('');
+    var body = Buffer.concat(r._jsonChunks).toString();
     r._jsonChunks = null;
 
-    if (r.status === 403 || r.status === 404) {
-        r.status = 404;
-        r.sendBuffer(JSON.stringify({ error: 'not found' }), { last: true });
-        return;
+    // Headers are already sent: status can't change here. 403/404 are mapped by
+    // error_page; any other S3 error gets a JSON body under S3's own status.
+    var out;
+    if (r.status !== 200) {
+        r.error('listing_json: S3 answered ' + r.status);
+        out = { error: 'upstream listing request failed' };
+    } else {
+        try {
+            out = _parseXmlToJson(body);
+        } catch (e) {
+            r.error('listing_json: failed to parse listing XML: ' + e);
+            out = { error: 'upstream listing parse failed' };
+        }
     }
-    if (r.status >= 400) {
-        r.status = r.status >= 500 ? 502 : r.status;
-        var errMsg = r.status >= 500 ? 'upstream listing request failed' : 'listing request failed';
-        r.sendBuffer(JSON.stringify({ error: errMsg }), { last: true });
-        return;
-    }
-
-    var result;
-    try {
-        result = _parseXmlToJson(body);
-    } catch (e) {
-        r.error('listing_json: failed to parse listing XML: ' + e);
-        r.sendBuffer(JSON.stringify({ error: 'upstream listing parse failed' }), { last: true });
-        return;
-    }
-
-    var isFirstPage = !r.variables.arg_marker;
-    if (FOUR_O_FOUR_ON_EMPTY_BUCKET && isFirstPage && result.entries.length === 0) {
-        r.status = 404;
-        r.sendBuffer(JSON.stringify({ error: 'not found' }), { last: true });
-        return;
-    }
-
-    r.sendBuffer(JSON.stringify(result), { last: true });
+    r.sendBuffer(JSON.stringify(out), { last: true });
 }
 
 function _parseXmlToJson(body) {
@@ -122,7 +107,7 @@ function _parseXmlToJson(body) {
                 type: 'directory',
                 size: null,
                 lastModified: null,
-                href: _buildHref(ROOT_PATH, full)
+                href: _buildHref(ROOT_PATH, _stripPrefixPath(full))
             });
         }
 
@@ -138,17 +123,21 @@ function _parseXmlToJson(body) {
                 type: 'file',
                 size: sizeTag ? Number(sizeTag.$text) : null,
                 lastModified: lastModTag ? lastModTag.$text : null,
-                href: _buildHref(ROOT_PATH, key)
+                href: _buildHref(ROOT_PATH, _stripPrefixPath(key))
             });
         }
     }
 
     return {
-        path: ROOT_PATH + globalPrefix,
+        path: _joinRoot(ROOT_PATH, _stripPrefixPath(globalPrefix)),
         entries: entries,
         truncated: truncated,
         nextMarker: nextMarker
     };
+}
+
+function _stripPrefixPath(key) {
+    return PREFIX_PATH && key.indexOf(PREFIX_PATH) === 0 ? key.substring(PREFIX_PATH.length) : key;
 }
 
 function _findChildTag(parent, name) {
@@ -159,16 +148,17 @@ function _findChildTag(parent, name) {
     return null;
 }
 
+function _joinRoot(rootPath, path) {
+    var sep = rootPath.length > 0 && rootPath.charAt(rootPath.length - 1) !== '/' && path.charAt(0) !== '/' ? '/' : '';
+    return rootPath + sep + path;
+}
+
 function _buildHref(rootPath, path) {
-    var prefix = rootPath;
-    if (prefix.length > 0 && prefix.charAt(prefix.length - 1) !== '/' && path.charAt(0) !== '/') {
-        prefix = prefix + '/';
-    }
-    var full = prefix + path;
+    var full = _joinRoot(rootPath, path);
     if (full.charAt(0) === '/') {
         full = full.substring(1);
     }
-    var segments = full.split('/');
+var segments = full.split('/');
     var encoded = [];
     for (var i = 0; i < segments.length; i++) {
         encoded.push(segments[i] ? s3gateway._encodeURIComponent(segments[i]) : segments[i]);
@@ -184,6 +174,7 @@ export default {
     _test: {
         parseXmlToJson: _parseXmlToJson,
         buildHref: _buildHref,
+        joinRoot: _joinRoot,
         wantsJson: _wantsJson
     }
 };

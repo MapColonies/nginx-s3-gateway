@@ -1,5 +1,5 @@
 # MapColonies S3 gateway image — built on the MapColonies nginx base.
-ARG NGINX_BASE_IMAGE=acrarolibotnonprod.azurecr.io/common/nginx:1.31.7-otel-dev
+ARG NGINX_BASE_IMAGE
 
 # Stage 1: the official S3 Gateway source (version-independent gateway pieces).
 FROM nginxinc/nginx-s3-gateway:unprivileged-oss-20261014 AS gateway-source

@@ -3,6 +3,7 @@ import listing from '/work/nginx-config/listing_json.js';
 var parseXmlToJson = listing._test.parseXmlToJson;
 var buildHref = listing._test.buildHref;
 var wantsJson = listing._test.wantsJson;
+var joinRoot = listing._test.joinRoot;
 
 var failures = 0;
 function check(name, actual, expected) {
@@ -76,6 +77,9 @@ check('href encodes each segment', buildHref('', 'dir 1/a b.txt'), '/dir%201/a%2
 check('href keeps slashes', buildHref('', 'a/b/c'), '/a/b/c');
 check('href applies root prefix', buildHref('root/', 'a b'), '/root/a%20b');
 check('href with leading slash prefix does not double-slash', buildHref('/files', 'a/b'), '/files/a/b');
+
+check('root without trailing slash is joined', joinRoot('/files', 'nested/'), '/files/nested/');
+check('empty root leaves path as is', joinRoot('', 'dir1/'), 'dir1/');
 
 // --- wantsJson ---
 

@@ -273,6 +273,8 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Connection '';
 
+        proxy_cache_key "$request_method$host$uri$is_args$args";
+
         js_header_filter listing_json.htmlListingHeaders;
 
         xslt_stylesheet /etc/nginx/include/listing.xsl;
@@ -310,8 +312,18 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Connection '';
 
+        # Listing pages differ only by query string (marker), which the
+        # server-level cache key omits.
+        proxy_cache_key "$request_method$host$uri$is_args$args";
+
         js_header_filter listing_json.jsonListingHeaders;
-        js_body_filter listing_json.jsonBodyFilter;
+        # buffer_type=buffer: decode the body once, not per chunk, so
+        # multi-byte characters split across chunks survive.
+        js_body_filter listing_json.jsonBodyFilter buffer_type=buffer;
+
+        # A body filter cannot change the status line, so errors are mapped here.
+        proxy_intercept_errors on;
+        error_page 403 404 =404 @error404Json;
 
         proxy_pass  ${S3_SERVER_PROTO}://storage_urls$s3uri;
         include /etc/nginx/conf.d/gateway/s3listing_location.conf;
@@ -372,6 +384,13 @@ server {
         include /etc/nginx/conf.d/gateway/cors.conf;
 
         return 404;
+    }
+
+    location @error404Json {
+        include /etc/nginx/conf.d/gateway/cors.conf;
+        add_header Vary Accept always;
+        default_type application/json;
+        return 404 '{"error":"not found"}';
     }
 
     location @trailslashControl {
