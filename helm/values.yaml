@@ -116,6 +116,17 @@ s3:
   cacheValidForbidden: 30s
   # Object HEADed by the readiness probe to verify S3 reachability. Must exist in the bucket.
   readinessObject: liveness.txt
+  # Entries per directory listing page (S3 max 1000).
+  directoryListingPageSize: 1000
+  # When true, an initContainer uploads readinessObject to the bucket on pod start.
+  # Requires write access to the bucket - leave false if credentials are read-only.
+  seedReadinessObject: false
+  # Image for the seedReadinessObject init container, mirrored into the private
+  # registry from Docker Hub's amazon/aws-cli.
+  seedReadinessImage:
+    repository: common/aws-cli
+    tag: 2.17.62
+  appendSlashForPossibleDirectory: false
   # customServerConf:
   # customLocationConf:
   # sigsVersion: 4

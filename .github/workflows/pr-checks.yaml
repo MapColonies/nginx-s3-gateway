@@ -1,0 +1,18 @@
+name: PR checks
+
+on:
+  pull_request:
+    branches: [master]
+
+jobs:
+  njs-unit-tests:
+    name: njs unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # scripts/test-njs.sh defaults to the public nginxinc/nginx-s3-gateway
+      # image - the same one Dockerfile stage 1 copies /etc/nginx/include from -
+      # so this needs no registry credentials and works on fork PRs.
+      - name: Run njs unit tests
+        run: ./scripts/test-njs.sh
