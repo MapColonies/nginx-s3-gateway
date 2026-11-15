@@ -34,7 +34,6 @@ ENV DIRECTORY_LISTING_PATH_PREFIX= \
 # Gateway-specific OPA/JWT auth extension
 COPY nginx-config/opa_auth.js /etc/nginx/
 
-# TerrainRGB /cogs/ tile route (helm `terrainTiles.enabled`)
 COPY nginx-config/cogtiles.js /etc/nginx/
 
 RUN chmod +x /docker-entrypoint.sh && \

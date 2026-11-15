@@ -161,7 +161,7 @@ server {
     }
     {{- if .Values.terrainTiles.enabled }}
 
-    # One COG per <layer>/<z>.tif (scripts/build_cog_levels.sh style); rows counted from the top.
+    # One COG per <layer>/<z>.tif; rows counted from the top.
     location ~ ^/cogs/(?<cog_dir>[A-Za-z0-9_./-]+)/(?<tile_z>\d+)/(?<tile_x>\d+)/(?<tile_y>\d+)\.webp$ {
         limit_except GET HEAD OPTIONS {}
         include /etc/nginx/conf.d/gateway/cors.conf;

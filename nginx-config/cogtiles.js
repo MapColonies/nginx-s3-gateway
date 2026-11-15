@@ -1,7 +1,5 @@
-// Serves z/x/y tiles (rows from the top) from a COG built with TILING_SCHEME=WorldCRS84Quad
-// and ALIGNED_LEVELS covering every served level: one COG per <layer>/<z>.tif. Each tile's
-// bytes are a complete WebP image, so a tile is one byte-range read. Ranges go back through
-// this gateway (location /) to reuse S3 signing, auth and its slice cache.
+// Each <layer>/<z>.tif's 256 px tiles must be that level's WorldCRS84 grid tiles, each a complete WebP
+// image, so a tile is one byte-range read. Reads go back through location / for S3 signing and its cache.
 
 const GATEWAY = "http://127.0.0.1:8080";
 const LEVEL0_RES = 0.703125;
@@ -12,7 +10,9 @@ const TYPE_SIZE = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 7: 1, 11: 4, 12: 8, 16: 8 };
 async function readRange(key, pos, len) {
   const res = await ngx.fetch(`${GATEWAY}/${key}`, { headers: { Range: `bytes=${pos}-${pos + len - 1}` } });
   if (res.status !== 206 && res.status !== 200) {
-    throw new Error(`range ${pos}+${len} of ${key}: HTTP ${res.status}`);
+    const err = new Error(`range ${pos}+${len} of ${key}: HTTP ${res.status}`);
+    err.notFound = res.status === 404;
+    throw err;
   }
   const body = await res.arrayBuffer();
   return new DataView(body);
@@ -112,6 +112,8 @@ async function tile(r) {
     r.headersOut["Content-Type"] = "image/webp";
     r.return(200, Buffer.from(body.buffer));
   } catch (e) {
+    // No file for this level (or layer) is a missing tile, not a gateway failure.
+    if (e.notFound) return r.return(404);
     r.error(e.message);
     r.return(502);
   }
