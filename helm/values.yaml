@@ -24,6 +24,11 @@ authorization:
   s3:
     enabled: true
 
+terrainTiles:
+  # Serves /cogs/<layer>/{z}/{x}/{y}.webp tiles by byte-range reading one COG per
+  # <layer>/<z>.tif (WorldCRS84 grid, 256px tiles). Off by default.
+  enabled: false
+
 opentelemetry:
   # -- OpenTelemetry service name associated with this NGINX application
   serviceName: nginx

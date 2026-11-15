@@ -75,6 +75,12 @@ http {
     js_import auth from /etc/nginx/opa_auth.js;
     js_set $jwt_payload_sub auth.jwtPayloadSub;
     {{ end }}
+    {{- if .Values.terrainTiles.enabled }}
+
+    # Parsed COG headers for the /cogs/ route; the timeout bounds how long a replaced file is served stale.
+    js_shared_dict_zone zone=cogheaders:1m type=string timeout=10m;
+    js_fetch_max_response_buffer_size 4m;
+    {{- end }}
 
     js_var $opa_result;
     js_var $opa_reason;
