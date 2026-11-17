@@ -304,7 +304,10 @@ server {
         # Configuration for handling locations ending with /index.html
 
         # This regex location takes precedence over `location /`, so it must
-        # carry the same authorization, or */index.html skips the token check.
+        # carry the same authorization and method restrictions, or */index.html
+        # skips the token check and allows write methods to reach S3.
+        limit_except ${LIMIT_METHODS_TO} { deny all; }
+
         {{ include "nginx-s3-gateway.otelTrace" . | nindent 8 }}
         {{ include "nginx-s3-gateway.authRequest" . | nindent 8 }}
 
