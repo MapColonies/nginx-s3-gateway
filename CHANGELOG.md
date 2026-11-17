@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.0.2](https://github.com/MapColonies/nginx-s3-gateway/compare/v7.0.1...v7.0.2) (2026-11-17)
+
+
+### Bug Fixes
+
+* enforce auth on */index.html location (MAPCO-12607) ([#46](https://github.com/MapColonies/nginx-s3-gateway/issues/46)) ([740b9c0](https://github.com/MapColonies/nginx-s3-gateway/commit/740b9c0478b58b483ed331826565b7ff6652d3f3))
+
 ## [7.0.1](https://github.com/MapColonies/nginx-s3-gateway/compare/v7.0.0...v7.0.1) (2026-11-04)
 
 
