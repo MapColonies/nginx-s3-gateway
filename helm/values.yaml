@@ -25,8 +25,8 @@ authorization:
     enabled: true
 
 terrainTiles:
-  # Serves /cogs/<layer>/{z}/{x}/{y}.webp tiles by byte-range reading one COG per
-  # <layer>/<z>.tif (WorldCRS84 grid, 256px tiles). Off by default.
+  # Serves /terrains/<layer>/{z}/{x}/{y}.webp tiles by byte-range reading one COG per
+  # terrains/<layer>/<z>.tif (WorldCRS84 grid, 256px tiles). Off by default.
   enabled: false
 
 opentelemetry:

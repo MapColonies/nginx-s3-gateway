@@ -77,7 +77,7 @@ http {
     {{ end }}
     {{- if .Values.terrainTiles.enabled }}
 
-    # Parsed COG headers for the /cogs/ route; the timeout bounds how long a replaced file is served stale.
+    # Parsed COG headers for the TerrainRGB tile route; the timeout bounds how long a replaced file is served stale.
     js_shared_dict_zone zone=cogheaders:1m type=string timeout=10m;
     js_fetch_max_response_buffer_size 4m;
     {{- end }}

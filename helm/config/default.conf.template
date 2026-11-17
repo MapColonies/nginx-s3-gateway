@@ -124,7 +124,7 @@ server {
         {{- if and .Values.terrainTiles.enabled (or .Values.authorization.opa.enabled .Values.authorization.s3.enabled) }}
 
         # cogtiles.js re-enters here for each tile's byte-range reads, already authorized
-        # once by the /cogs/ location, so loopback skips the auth_request below.
+        # once by the TerrainRGB tile location, so loopback skips the auth_request below.
         satisfy any;
         allow 127.0.0.1;
         deny all;
@@ -161,8 +161,9 @@ server {
     }
     {{- if .Values.terrainTiles.enabled }}
 
-    # One COG per <layer>/<z>.tif; rows counted from the top.
-    location ~ ^/cogs/(?<cog_dir>[A-Za-z0-9_./-]+)/(?<tile_z>\d+)/(?<tile_x>\d+)/(?<tile_y>\d+)\.webp$ {
+    # One COG per terrains/<layer>/<z>.tif, next to the quantized-mesh terrains, whose tiles end in .terrain;
+    # rows counted from the top.
+    location ~ ^/(?<cog_dir>terrains/[A-Za-z0-9_./-]+)/(?<tile_z>\d+)/(?<tile_x>\d+)/(?<tile_y>\d+)\.webp$ {
         limit_except GET HEAD OPTIONS {}
         include /etc/nginx/conf.d/gateway/cors.conf;
 

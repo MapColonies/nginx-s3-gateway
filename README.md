@@ -44,8 +44,9 @@ CI (`.github/workflows/build_and_push.yaml`) supplies the base image and tag fro
   OPA re-uses the base image's `opaAuth`/`jwtPayloadSub` njs.
 * **Caching** — proxy cache tunables via the `PROXY_CACHE_*` env / `s3.cache*` values.
 * **TerrainRGB tile route** (`terrainTiles.enabled`, off by default) — `GET
-  /cogs/<layer path>/{z}/{x}/{y}.webp` serves one tile's bytes from a per-level Cloud
-  Optimized GeoTIFF at `<layer path>/<z>.tif`, by parsing the TIFF IFD and reading one
+  /terrains/<layer path>/{z}/{x}/{y}.webp` serves one tile's bytes from a per-level Cloud
+  Optimized GeoTIFF at `terrains/<layer path>/<z>.tif`, next to the quantized-mesh terrains
+  (whose tiles end in `.terrain`, so they still go to `location /`), by parsing the TIFF IFD and reading one
   byte range (`nginx-config/cogtiles.js`). Each COG must be built on the WorldCRS84
   grid (EPSG:4326, 256px tiles, 2×1 tiles at level 0), rows counted from the top; each
   internal tile is a complete lossless WebP image. The route applies the same auth as
