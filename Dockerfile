@@ -2,7 +2,7 @@
 ARG NGINX_BASE_IMAGE
 
 # Stage 1: the official S3 Gateway source (version-independent gateway pieces).
-FROM nginxinc/nginx-s3-gateway:unprivileged-oss-20250825 AS gateway-source
+FROM nginxinc/nginx-s3-gateway:unprivileged-oss-20261014 AS gateway-source
 
 # Stage 2: build the final image on the MapColonies nginx base.
 FROM ${NGINX_BASE_IMAGE}
@@ -10,11 +10,13 @@ FROM ${NGINX_BASE_IMAGE}
 USER root
 
 # The MapColonies nginx base is Alpine; the gateway entrypoint needs bash.
-RUN apk add --no-cache bash
+# The upstream scripts use #!/usr/bin/bash (Debian path); Alpine puts bash in /bin.
+RUN apk add --no-cache bash && ln -sf /bin/bash /usr/bin/bash
 
 COPY --from=gateway-source /etc/nginx/include /etc/nginx/include
 COPY --from=gateway-source /etc/nginx/templates /etc/nginx/templates
 COPY --from=gateway-source /etc/nginx/conf.d /etc/nginx/conf.d
+COPY --from=gateway-source /etc/nginx/gateway_env_lib.sh /etc/nginx/gateway_env_lib.sh
 COPY --from=gateway-source /docker-entrypoint.d /docker-entrypoint.d
 
 # Use the gateway's own entrypoint
@@ -22,6 +24,7 @@ COPY --from=gateway-source /docker-entrypoint.sh /docker-entrypoint.sh
 
 # ENV defaults the gateway image carries but the base does not
 ENV DIRECTORY_LISTING_PATH_PREFIX= \
+    DIRECTORY_LISTING_PAGE_SIZE= \
     STRIP_LEADING_DIRECTORY_PATH= \
     PREFIX_LEADING_DIRECTORY_PATH= \
     PROXY_CACHE_MAX_SIZE=10g \
@@ -33,6 +36,9 @@ ENV DIRECTORY_LISTING_PATH_PREFIX= \
 
 # Gateway-specific OPA/JWT auth extension
 COPY nginx-config/opa_auth.js /etc/nginx/
+
+# Gateway-specific JSON directory listing extension
+COPY nginx-config/listing_json.js /etc/nginx/
 
 RUN chmod +x /docker-entrypoint.sh && \
     chmod -R g+rwX /etc/nginx /var/cache/nginx /docker-entrypoint.d /docker-entrypoint.sh
