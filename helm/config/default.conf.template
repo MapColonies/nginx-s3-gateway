@@ -1,6 +1,8 @@
 js_import /etc/nginx/include/awscredentials.js;
 js_import /etc/nginx/include/s3gateway.js;
-
+{{ if .Values.terrainTiles.enabled }}
+js_import cogtiles from /etc/nginx/cogtiles.js;
+{{ end }}
 
 # We include only the variables needed for the authentication signatures that
 # we plan to use.
@@ -119,6 +121,14 @@ server {
         # CORS is enabled, acceptable methods are GET, HEAD, and OPTIONS.
         # Otherwise, they are GET and HEAD.
         limit_except ${LIMIT_METHODS_TO} {}
+        {{- if and .Values.terrainTiles.enabled (or .Values.authorization.opa.enabled .Values.authorization.s3.enabled) }}
+
+        # cogtiles.js re-enters here for each tile's byte-range reads, already authorized
+        # once by the TerrainRGB tile location, so loopback skips the auth_request below.
+        satisfy any;
+        allow 127.0.0.1;
+        deny all;
+        {{- end }}
 
         # CORS is implemented by returning the appropriate headers as part of
         # the response to an OPTIONS request. If you want to customize the
@@ -135,6 +145,29 @@ server {
 
         js_content s3gateway.redirectToS3;
     }
+    {{- if .Values.terrainTiles.enabled }}
+
+    # One COG per terrains/<layer>/<z>.tif, next to the quantized-mesh terrains, whose tiles end in .terrain;
+    # rows counted from the top.
+    location ~ ^/(?<cog_dir>terrains/[A-Za-z0-9_./-]+)/(?<tile_z>\d+)/(?<tile_x>\d+)/(?<tile_y>\d+)\.webp$ {
+        limit_except GET HEAD OPTIONS {}
+        include /etc/nginx/conf.d/gateway/cors.conf;
+
+        {{ if .Values.authorization.opa.enabled }}
+        set $domain {{ .Values.authorization.opa.domain }};
+        {{ if .Values.authorization.s3.enabled }}
+        auth_request /_combined_auth;
+        {{ else }}
+        auth_request /_opa_auth;
+        {{ end }}
+        {{ else if .Values.authorization.s3.enabled }}
+        auth_request /aws/credentials/retrieve;
+        {{ end }}
+
+        set $cog_key $cog_dir/$tile_z.tif;
+        js_content cogtiles.tile;
+    }
+    {{- end }}
 
     {{ if .Values.authorization.opa.enabled }}
     {{ if .Values.authorization.s3.enabled }}
