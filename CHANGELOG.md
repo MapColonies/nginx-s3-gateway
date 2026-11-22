@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.0.3](https://github.com/MapColonies/nginx-s3-gateway/compare/v7.0.2...v7.0.3) (2026-11-22)
+
+
+### Helm Changes
+
+* add mclabels to pod template (MAPCO-11866) ([#42](https://github.com/MapColonies/nginx-s3-gateway/issues/42)) ([b21ab2d](https://github.com/MapColonies/nginx-s3-gateway/commit/b21ab2d6527f2e2eb2f7f808d7b3ab9a31b7c918))
+
 ## [7.0.2](https://github.com/MapColonies/nginx-s3-gateway/compare/v7.0.1...v7.0.2) (2026-11-17)
 
 
