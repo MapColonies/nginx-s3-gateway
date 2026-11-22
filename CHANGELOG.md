@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.0.4](https://github.com/MapColonies/nginx-s3-gateway/compare/v7.0.3...v7.0.4) (2026-11-22)
+
+
+### Helm Changes
+
+* disable router sticky-session cookie on routes (MAPCO-12584) ([#45](https://github.com/MapColonies/nginx-s3-gateway/issues/45)) ([ae9d9e4](https://github.com/MapColonies/nginx-s3-gateway/commit/ae9d9e4ab91293a70880728a1877053a3f17a6cd))
+
 ## [7.0.3](https://github.com/MapColonies/nginx-s3-gateway/compare/v7.0.2...v7.0.3) (2026-11-22)
 
 
